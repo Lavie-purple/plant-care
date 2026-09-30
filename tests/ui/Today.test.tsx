@@ -187,6 +187,7 @@ describe('诚实性：不可用的东西必须显示为不可用', () => {
       },
       { timeout: 5000 },
     );
+  });
 
   test('没有浇水记录时显示「尚无记录」而不是 0 天', async () => {
     const { svc } = await setup();

@@ -18,6 +18,8 @@ import {
   decideStrategy,
 } from '../src/data/offlinePolicy.js';
 import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const nav = (url: string) => ({ method: 'GET', url, isNavigation: true });
 const asset = (url: string) => ({ method: 'GET', url, isNavigation: false });
@@ -120,11 +122,12 @@ describe('缓存清单', () => {
  * 避免「改了策略忘了同步到 service worker」这种静默失效。
  */
 describe('service worker 与策略模块保持一致', () => {
-  // 路径必须从项目根算。测试编译后位于 dist/tests/，
-  // 用 import.meta.url 的相对路径会解析成 dist/public/sw.js —— 那个文件不存在。
-  const here = new URL(import.meta.url).pathname.replace(/\\/g, '/');
-  const repoRoot = here.replace(/\/dist\/tests\/.*$/, '/');
-  const src = readFileSync(repoRoot + 'public/sw.js', 'utf8');
+  // 路径必须从项目根算，且必须用 fileURLToPath 转换。
+  // 两种错法都踩过：
+  //   1. 相对 import.meta.url → 解析成 dist/public/sw.js，那文件不存在
+  //   2. URL.pathname → 路径含空格时变成 %20，Windows 上会拼出 H:/H:/AI%20project/...
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(resolve(here, '..', '..', 'public', 'sw.js'), 'utf8');
 
   test('黑名单主机一致', () => {
     for (const h of NEVER_CACHE_HOSTS) {
