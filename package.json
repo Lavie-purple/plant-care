@@ -1,0 +1,21 @@
+{
+  "name": "personal-plant-manager",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local-first 个人植物管理与养护助手。植物 + 历史 + 天气 → 浇水建议。",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test \"dist/tests/**/*.test.js\"",
+    "test:watch": "npm run build && node --test --watch \"dist/tests/**/*.test.js\"",
+    "verify": "npm run typecheck && npm run test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "typescript": "^5.6.0"
+  }
+}

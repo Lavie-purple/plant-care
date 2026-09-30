@@ -1,0 +1,121 @@
+# ============================================================
+# 本机工作文件，不入库
+# 顺序说明：本文件必须在 `git init` 之前写好（AGENTS.md 硬约束）
+# 仓库根只应保留 README.md 与产品代码
+# ============================================================
+
+# ---- 协作规范与过程文档 ----
+AGENTS.md
+00-README-怎么用.md
+01-开工令.md
+02-触发式清单.md
+03-收尾核对.md
+04-流程路线图.md
+05-构建原理.md
+06-待验证条款池.md
+07-决策记录.md
+SPEC.md
+project_stats.md
+*.local.md
+docs/local/
+docs/working/
+
+# 复盘 / 评审 / 对话记录类
+retro/
+review/
+retros/
+postmortem/
+chats/
+*.retro.md
+*.review.md
+*.chat.md
+prompts/
+
+# 线框与视觉草稿（设计过程产物，不是产品代码）
+drafts/
+
+# ---- 密钥与本地配置：禁止入库 ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+config.local.*
+settings.local.*
+
+# ---- 依赖与构建产物 ----
+node_modules/
+.pnp
+.pnp.js
+dist/
+build/
+out/
+.output/
+.vite/
+.turbo/
+.cache/
+*.tsbuildinfo
+
+# ---- 测试与覆盖率 ----
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
+# ---- 本地数据：绝不提交真实数据 ----
+*.sqlite
+*.sqlite3
+*.db
+data/
+local-data/
+export/
+exports/
+backups/
+*.zip
+!fixtures/*.zip
+fixtures/user-data/
+
+# ---- 图片产物（测试图除外）----
+screenshots/
+*.local.png
+test-results/screenshots/
+
+# ---- 编辑器与系统 ----
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.shared.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- 日志与临时文件 ----
+*.log
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+tmp/
+temp/
+*.tmp
+*.bak
+*.orig
+*.rej
+
+# ---- 环境隔离 ----
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+.envrc
+
+# ---- 工具缓存 ----
+.mcp.json
+.zcode/
+.zcode-cache/
