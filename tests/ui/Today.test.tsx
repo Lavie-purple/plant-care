@@ -167,9 +167,12 @@ describe('诚实性：不可用的东西必须显示为不可用', () => {
 
     render(<Today service={svc} />);
 
-    await waitFor(() => {
-      expect(screen.getAllByText(/天气数据暂不可用/).length).toBeGreaterThan(0);
-    });
+    await waitFor(
+      () => {
+        expect(screen.getAllByText(/天气数据暂不可用/).length).toBeGreaterThan(0);
+      },
+      { timeout: 5000 },
+    );
   });
 
   test('天气不可用时仍然给出建议（核心功能不依赖天气服务）', async () => {
@@ -178,10 +181,12 @@ describe('诚实性：不可用的东西必须显示为不可用', () => {
 
     render(<Today service={svc} />);
 
-    await waitFor(() => {
-      expect(screen.getByRole('heading', { name: '今天浇水' })).toBeTruthy();
-    });
-  });
+    await waitFor(
+      () => {
+        expect(screen.getByRole('heading', { name: '今天浇水' })).toBeTruthy();
+      },
+      { timeout: 5000 },
+    );
 
   test('没有浇水记录时显示「尚无记录」而不是 0 天', async () => {
     const { svc } = await setup();

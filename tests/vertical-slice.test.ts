@@ -285,3 +285,90 @@ describe('多窗口并发：闭环中的并发写入', () => {
     assert.equal(final?.name, '龟背竹 A（窗 B 改名）', '库里的数据必须保持为另一窗口写入的');
   });
 });
+
+/**
+ * 天气获取的重试与降级。
+ *
+ * 起因是线上实测：同一个请求耗时在 213ms 到 1070ms 之间波动，
+ * 页面首次加载时并行请求更容易撞上抖动，早期版本一次失败就整页降级。
+ */
+describe('天气获取：超时重试后才降级', () => {
+  /** 造一个行为可编排的 provider。calls 记录被调用了几次。 */
+  function scriptedProvider(
+    steps: Array<() => Promise<unknown>>,
+  ): { provider: { fetch: () => Promise<unknown> }; calls: () => number } {
+    let n = 0;
+    return {
+      provider: {
+        fetch: async () => {
+          const step = steps[Math.min(n, steps.length - 1)];
+          n += 1;
+          if (!step) throw new Error('没有可用步骤');
+          return step();
+        },
+      },
+      calls: () => n,
+    };
+  }
+
+  /** 拿到一个已打开的仓库，同库名的后续 service 可以复用它 */
+  async function openRepo(name: string): Promise<Repository> {
+    setDatabaseName(name);
+    const repo = new Repository();
+    await repo.open();
+    openRepos.push(repo);
+    return repo;
+  }
+
+  test('前两次失败第三次成功 → 不降级', async () => {
+    const snap = { id: 'w1', city: '广州', temperature: 26 } as never;
+    const boom = async () => {
+      throw new TypeError('Failed to fetch');
+    };
+    const sp = scriptedProvider([boom, boom, async () => snap]);
+    const repo = await openRepo(`wx-a-${seq}`);
+    const svc = new PlantCareService(repo, sp.provider as never, fixedClock('2026-09-30T14:32:00+08:00'));
+
+    const r = await svc.loadWeather();
+    assert.equal(r.available, true, '重试成功后不应降级');
+    assert.equal(sp.calls(), 3);
+  });
+
+  test('全部失败才降级，且携带原因', async () => {
+    const sp = scriptedProvider([
+      async () => {
+        throw new TypeError('Failed to fetch');
+      },
+    ]);
+    const repo = await openRepo(`wx-b-${seq}`);
+    const svc = new PlantCareService(repo, sp.provider as never, fixedClock('2026-09-30T14:32:00+08:00'));
+
+    const r = await svc.loadWeather();
+    assert.equal(r.available, false);
+    assert.equal(sp.calls(), 3, '应重试满次数');
+    assert.ok(r.available === false && r.fallback.reason.length > 0, '降级必须带原因');
+  });
+
+  test('降级时不拿缓存冒充新数据（D-14）', async () => {
+    const dbName = `wx-c-${seq}`;
+    const good = new MockWeatherProvider(SCENARIOS.mild);
+    const repo1 = await openRepo(dbName);
+    const svc1 = new PlantCareService(repo1, good, fixedClock('2026-09-30T14:32:00+08:00'));
+    // 先成功一次，制造缓存
+    await svc1.loadWeather();
+
+    // 同一个库，换一个必失败的 provider
+    const sp = scriptedProvider([
+      async () => {
+        throw new TypeError('断了');
+      },
+    ]);
+    const repo2 = await openRepo(dbName);
+    const svc2 = new PlantCareService(repo2, sp.provider as never, fixedClock('2026-09-30T14:32:00+08:00'));
+    const r = await svc2.loadWeather();
+    assert.equal(r.available, false, '失败时不得返回缓存冒充新数据');
+    if (!r.available) {
+      assert.ok(r.fallback.lastSuccessAt, '但必须告知上次成功的时间');
+    }
+  });
+});

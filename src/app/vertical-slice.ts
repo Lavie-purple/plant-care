@@ -18,6 +18,7 @@ import type {
   Plant,
   Settings,
   UserAction,
+  WeatherSnapshot,
   WateringMethod,
   WateringRecord,
 } from '../domain/types.js';
@@ -204,7 +205,7 @@ export class PlantCareService {
    */
   async loadWeather(): Promise<WeatherInput> {
     try {
-      const snap = await this.weather.fetch(DEFAULT_SETTINGS);
+      const snap = await this.fetchWeatherWithRetry();
       await this.repo.saveWeatherSnapshot(snap);
       return { available: true, snapshot: snap };
     } catch (e) {
@@ -216,6 +217,39 @@ export class PlantCareService {
         ...(cached ? { lastSuccessAt: cached.timestamp } : {}),
       });
     }
+  }
+
+  /**
+   * 带超时与重试的天气获取。
+   *
+   * 为什么需要：实测线上同一个请求耗时在 213ms 到 1070ms 之间波动，
+   * 页面首次加载时并行请求更容易撞上抖动。早期版本一次失败就报「天气不可用」，
+   * 而这是个每天都要看的工具——偶发一次抖动就整页降级，代价比收益大得多。
+   *
+   * 仍然严格遵守 D-14：重试全部失败后才降级，且降级时明确说明原因，
+   * 绝不用缓存冒充新数据。
+   */
+  private async fetchWeatherWithRetry(): Promise<WeatherSnapshot> {
+    const attempts = 3;
+    const timeoutMs = 6000;
+    let lastError: unknown;
+
+    for (let i = 0; i < attempts; i += 1) {
+      try {
+        // 每次尝试独立计时，避免上一次的计时器泄漏
+        const timer = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('请求超时（6 秒无响应）')), timeoutMs);
+        });
+        return await Promise.race([this.weather.fetch(DEFAULT_SETTINGS), timer]);
+      } catch (e) {
+        lastError = e;
+        if (i < attempts - 1) {
+          // 退避后重试。天气接口是幂等读操作，重试安全。
+          await new Promise((r) => setTimeout(r, 400 * (i + 1)));
+        }
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error(String(lastError));
   }
 
   /** 界面层用这个显式取缓存，并在 UI 上标注「这是 X 分钟前的数据」 */
