@@ -28,7 +28,7 @@ import { buildQueue, completeRecord, DEFAULT_PENDING_DAYS, type QueueItem } from
 import { decideConflict, markPrompted, resolveConflict, shouldPrompt, type Resolution } from './ruleConflict.js';
 import { DataTransferService } from '../data/DataTransferService.js';
 import { STORES } from '../storage/indexeddb.js';
-import { toWeatherInput, type WeatherProvider } from '../weather/provider.js';
+import { toWeatherInput, WeatherFetchError, type WeatherProvider } from '../weather/provider.js';
 import type { WeatherInput } from '../domain/types.js';
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -210,10 +210,14 @@ export class PlantCareService {
       return { available: true, snapshot: snap };
     } catch (e) {
       const reason = e instanceof Error ? e.message : String(e);
-      // 只取时间戳用于告知用户「数据有多旧」，不把缓存内容当作本次结果
+      // 诊断详情必须传到界面上。
+      // 只给一句「无法连接」的话，用户和排障都无从下手 ——
+      // 到底是超时、跨域被拦、还是 URL 拼错了，区别很大。
+      const detail = e instanceof WeatherFetchError ? e.serverResponse : undefined;
       const cached = await this.repo.latestWeatherSnapshot();
       return toWeatherInput(undefined, {
         reason,
+        ...(detail ? { detail } : {}),
         ...(cached ? { lastSuccessAt: cached.timestamp } : {}),
       });
     }

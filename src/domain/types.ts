@@ -323,7 +323,10 @@ export interface WeatherUnavailable {
   unavailable: true;
   /** 最后一次成功获取的时间，界面必须展示 */
   lastSuccessAt?: ISODateTime;
+  /** 人话原因，界面直接显示 */
   reason: string;
+  /** 诊断详情：URL、原始错误、状态码。界面折叠显示，远程排障靠它 */
+  detail?: string;
 }
 
 export type WeatherInput =

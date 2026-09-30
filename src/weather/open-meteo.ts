@@ -78,10 +78,26 @@ interface OpenMeteoResponse {
 export class OpenMeteoProvider implements WeatherProvider {
   readonly name = 'open-meteo';
 
-  constructor(
-    private readonly fetchImpl: typeof fetch = globalThis.fetch,
-    private readonly baseUrl = ENDPOINT,
-  ) {}
+  /**
+   * fetch 的绑定推迟到实际调用时。
+   *
+   * 早先写成构造函数的默认参数 `= globalThis.fetch`，那个值在 new 的
+   * 那一刻就固定了。若此刻 fetch 不可用（某些嵌入环境、测试替身、
+   * 或脚本执行顺序问题），fetchImpl 会是 undefined，之后每次调用
+   * 都抛 TypeError 并被包装成「无法连接到天气服务」，
+   * 而实际一次请求都没发出过 —— 表现为天气永远不可用。
+   */
+  private readonly fetchImpl: typeof fetch;
+  private readonly baseUrl: string;
+
+  constructor(fetchImpl?: typeof fetch, baseUrl: string = ENDPOINT) {
+    const f = fetchImpl ?? ((...args: Parameters<typeof fetch>) => globalThis.fetch(...args));
+    if (typeof f !== 'function') {
+      throw new TypeError('fetch 不可用，无法获取天气');
+    }
+    this.fetchImpl = f;
+    this.baseUrl = baseUrl;
+  }
 
   async fetch(settings: Settings): Promise<WeatherSnapshot> {
     const url = this.buildUrl(settings);

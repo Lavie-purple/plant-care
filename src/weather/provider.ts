@@ -42,7 +42,7 @@ export class WeatherFetchError extends Error {
 /** 把 Provider 抛出的错误或缺失缓存统一转成引擎可消费的 WeatherInput */
 export function toWeatherInput(
   snapshot: WeatherSnapshot | undefined,
-  failure?: { reason: string; lastSuccessAt?: string },
+  failure?: { reason: string; lastSuccessAt?: string; detail?: string },
 ): WeatherInput {
   if (snapshot) return { available: true, snapshot };
   return {
@@ -51,6 +51,7 @@ export function toWeatherInput(
       unavailable: true,
       reason: failure?.reason ?? '尚未获取过天气数据',
       ...(failure?.lastSuccessAt !== undefined ? { lastSuccessAt: failure.lastSuccessAt } : {}),
+      ...(failure?.detail !== undefined ? { detail: failure.detail } : {}),
     },
   };
 }

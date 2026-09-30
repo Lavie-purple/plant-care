@@ -144,6 +144,14 @@ export function Today({ service, onOpenPlant, onOpenQueue, onAddPlant }: TodayPr
           <div>
             <div className="t-label" style={{ fontWeight: 600 }}>天气数据暂不可用</div>
             <div className="t-meta" style={{ marginTop: 2 }}>
+              {weather.available === false && weather.fallback.detail && (
+                <details style={{ marginTop: 6 }}>
+                  <summary className="t-meta" style={{ cursor: 'pointer' }}>技术详情</summary>
+                  <div className="t-meta num" style={{ marginTop: 4, wordBreak: 'break-all' }}>
+                    {weather.fallback.detail}
+                  </div>
+                </details>
+              )}
               {weather.available === false && weather.fallback.lastSuccessAt
                 ? `最后一次成功获取于 ${new Date(weather.fallback.lastSuccessAt).toLocaleString('zh-CN')}`
                 : '植物管理不受影响，建议可能不如平时准确'}
