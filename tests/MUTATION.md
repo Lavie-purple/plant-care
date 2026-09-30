@@ -68,3 +68,18 @@ cp src/engine/recommendation.ts tmp/bak.ts  # 备份
 cp tmp/bak.ts src/engine/recommendation.ts  # 还原
 npm test                                    # 确认还原
 ```
+
+---
+
+## 天气数据源（第二批）
+
+| 注入的坏法 | 结果 | 保护的规则 |
+|---|---|---|
+| 去掉 km/h → m/s 换算 | 2 个测试变红 | 单位换算：大风阈值按 m/s 算，换错会让 8.9 km/h 被当成 8.9 m/s |
+| 去掉秒 → 小时换算 | 1 个测试变红 | `sunshine_duration` 单位是秒 |
+| 非 2xx 不抛错（吞掉） | 1 个测试变红 | 服务端原文必须回显，便于远程诊断 |
+| 未知天气码编造成「多云」 | 1 个测试变红 | 未知码原样显示，不得编造描述 |
+
+**这两个单位换算是真实踩到的坑**：写代码前先用 curl 拉了接口实际响应，
+发现 `wind_speed_10m` 是 km/h 而引擎阈值按 m/s 设，`sunshine_duration` 是秒而非小时。
+若凭记忆写，这两处会让高温和大风规则静默失效。
