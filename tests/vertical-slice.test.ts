@@ -133,17 +133,19 @@ describe('闭环全流程：建植物 → 设规则 → 记浇水 → 取天气 
 });
 
 describe('规则冲突：系统只提示，不改写（D-13 铁律在闭环里也成立）', () => {
-  test('高温下引擎提出提示，CareRule 字段不变', async () => {
+  test('高温让判定从「该浇」变「再等等」时提示，且 CareRule 字段不变', async () => {
     const { svc, repo } = await makeService(SCENARIOS.hotDry);
     const plant = await svc.addPlant({ name: '龟背竹 A', placement: '客厅', exposure: 'indoor_window' });
-    const rule = await svc.setCareRule(plant.id, 10, 14);
+    const rule = await svc.setCareRule(plant.id, 7, 10);
     const before = JSON.stringify(rule);
 
-    await seedWatering(svc, plant.id, 11);
+    // 第 10 天：设的 7-10 已到上限（该浇），高温把窗口推到 8-11（再等等）。
+    // 两边对今天该做什么意见不同，这才值得问一次。
+    await seedWatering(svc, plant.id, 10);
     const weatherIn = await svc.loadWeather();
     const rec = await svc.recommend(plant.id, weatherIn);
 
-    assert.equal(rec.shouldPromptRuleChange, true, '高温应触发提示');
+    assert.equal(rec.shouldPromptRuleChange, true, '判定被高温改变时应提示');
     assert.ok(rec.ruleConflictReason);
     const after = await repo.getCareRuleByPlant(plant.id);
     assert.equal(JSON.stringify(after), before, 'CareRule 不得被改写');
