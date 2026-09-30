@@ -116,6 +116,50 @@ describe('OpenMeteoProvider：单位换算（真实踩过的坑）', () => {
   });
 });
 
+describe('观测时刻 vs 抓取时刻：不是同一件事', () => {
+  // 回归测试：timestamp 曾记为「我请求的时刻」，导致界面上「来源」显示的时间
+  // 与用户实际看到的天气数据对不上。
+  test('timestamp 是接口给的观测时刻，不是抓取时刻', async () => {
+    const p = new OpenMeteoProvider(stubFetch(realResponseFixture()));
+    const snap = await p.fetch(SETTINGS);
+    // fixture 里 current.time = 2026-09-30T16:00 本地时间，utc_offset = 28800 (UTC+8)
+    const observed = new Date(snap.timestamp);
+    // 换算到 UTC+8 应该是 16:00
+    const localHour = observed.getUTCHours() + 8;
+    assert.equal(localHour, 16, );
+  });
+
+  test('同一次观测的重复抓取是同一条数据，id 相同并覆盖而非堆积', async () => {
+    // 正确语义：snapshot 的身份是「这份天气数据」，不是「我什么时候抓的」。
+    // 同一观测时刻重复抓取应得到同一条记录，否则缓存会堆积重复天气。
+    const p = new OpenMeteoProvider(stubFetch(realResponseFixture()));
+    const a = await p.fetch(SETTINGS);
+    const b = await p.fetch(SETTINGS);
+    assert.equal(a.id, b.id, '同一次观测必须是同一条数据');
+    assert.equal(a.timestamp, b.timestamp);
+  });
+
+  test('观测时刻变化时 id 随之变化', async () => {
+    const f1 = realResponseFixture();
+    f1.current.time = '2026-09-30T16:00';
+    const f2 = realResponseFixture();
+    f2.current.time = '2026-09-30T17:00';
+    const a = await new OpenMeteoProvider(stubFetch(f1)).fetch(SETTINGS);
+    const b = await new OpenMeteoProvider(stubFetch(f2)).fetch(SETTINGS);
+    assert.notEqual(a.id, b.id, '观测时刻不同必须是两条记录');
+    assert.notEqual(a.timestamp, b.timestamp);
+  });
+
+  test('current.time 缺失时不编造观测时刻', async () => {
+    const fixture = realResponseFixture();
+    fixture.current.time = 'not-a-time';
+    const p = new OpenMeteoProvider(stubFetch(fixture));
+    const snap = await p.fetch(SETTINGS);
+    // 解析失败时回退到抓取时刻，且必须是合法 ISO 串
+    assert.doesNotThrow(() => new Date(snap.timestamp).toISOString());
+  });
+});
+
 describe('OpenMeteoProvider：失败必须可远程诊断', () => {
   test('非 2xx 时抛出错误并携带服务端原文', async () => {
     const p = new OpenMeteoProvider(

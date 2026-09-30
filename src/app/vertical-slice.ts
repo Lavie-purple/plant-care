@@ -219,6 +219,21 @@ export class PlantCareService {
     return { available: true, snapshot: cached };
   }
 
+  /** 单株浇水历史，界面翻译来源说明时需要 */
+  async wateringHistory(plantId: string): Promise<WateringRecord[]> {
+    return this.repo.wateringHistory(plantId);
+  }
+
+  /** 列出全部植物 */
+  async listPlants(): Promise<Plant[]> {
+    return this.repo.allPlants();
+  }
+
+  /** 未解决的规则冲突条数，Today 页面顶部提醒条用 */
+  async countUnresolvedConflicts(): Promise<number> {
+    return (await this.repo.unresolvedConflicts()).length;
+  }
+
   /** 5. 生成建议。 */
   async recommend(plantId: string, weather: WeatherInput): Promise<EngineOutput> {
     const plant = await this.repo.getPlant(plantId);

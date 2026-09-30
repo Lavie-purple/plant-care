@@ -151,12 +151,20 @@ export class OpenMeteoProvider implements WeatherProvider {
     const forecast = this.buildForecast(json, now, offsetMs);
     const daily = json.daily;
 
+    // timestamp 必须是「这份天气是什么时候观测的」，不是「我什么时候请求的」。
+    // 两者在用户眼里是同一件事，但在缓存、来源标注、依据回溯里必须分开：
+    //   fetchedAt  = 抓取时刻，用于判断缓存新鲜度
+    //   observedAt = 观测时刻，用于向用户显示「数据来自几点」
+    // Open-Meteo 的 current.time 是当地时间且不带时区后缀，按 utc_offset_seconds 还原。
+    const parsedObserved = Date.parse(`${json.current.time}${tzSuffixOf(offsetMs)}`);
+    const observedMs = Number.isNaN(parsedObserved) ? now : parsedObserved;
+
     return {
-      id: `om-${now}-${settings.latitude}`,
+      id: `om-${observedMs}-${now}-${settings.latitude}`,
       city: settings.city,
       latitude: json.latitude,
       longitude: json.longitude,
-      timestamp: new Date(now).toISOString(),
+      timestamp: new Date(observedMs).toISOString(),
       temperature: json.current.temperature_2m,
       humidity: json.current.relative_humidity_2m,
       // 取今天最大降雨概率作为当天的降雨概率
@@ -176,12 +184,7 @@ export class OpenMeteoProvider implements WeatherProvider {
   private buildForecast(json: OpenMeteoResponse, now: number, offsetMs: number): ForecastHour[] {
     const h = json.hourly;
     if (!h) return [];
-    const sign = offsetMs >= 0 ? '+' : '-';
-    const abs = Math.abs(offsetMs);
-    const offH = String(Math.floor(abs / 3_600_000)).padStart(2, '0');
-    const offM = String(Math.floor((abs % 3_600_000) / 60_000)).padStart(2, '0');
-    // 用接口自带的 utc_offset_seconds 还原成绝对时刻，不硬编码 +08:00，否则换城市就错
-    const tzSuffix = `${sign}${offH}:${offM}`;
+    const tzSuffix = tzSuffixOf(offsetMs);
 
     const out: ForecastHour[] = [];
     for (let i = 0; i < h.time.length; i += 1) {
@@ -201,4 +204,13 @@ export class OpenMeteoProvider implements WeatherProvider {
     }
     return out;
   }
+}
+
+/** 把 utc_offset_seconds 毫秒数转成 ±HH:MM 后缀，不硬编码 +08:00 */
+function tzSuffixOf(offsetMs: number): string {
+  const sign = offsetMs >= 0 ? '+' : '-';
+  const abs = Math.abs(offsetMs);
+  const hh = String(Math.floor(abs / 3_600_000)).padStart(2, '0');
+  const mm = String(Math.floor((abs % 3_600_000) / 60_000)).padStart(2, '0');
+  return `${sign}${hh}:${mm}`;
 }

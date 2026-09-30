@@ -49,6 +49,7 @@ node_modules/
 .pnp
 .pnp.js
 dist/
+dist-web/
 build/
 out/
 .output/

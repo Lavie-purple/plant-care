@@ -8,15 +8,31 @@
     "node": ">=20"
   },
   "scripts": {
+    "dev": "vite",
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test --test-concurrency=1 \"dist/tests/**/*.test.js\"",
-    "test:watch": "node --test --watch --test-concurrency=1 \"dist/tests/**/*.test.js\"",
-    "verify": "npm run build && node --test --test-concurrency=1 \"dist/tests/**/*.test.js\" && echo \"VERDICT: ALL GREEN\""
+    "typecheck:core": "tsc -p tsconfig.json --noEmit",
+    "typecheck:ui": "tsc -p tsconfig.ui.json",
+    "test:core": "node --test --test-concurrency=1 \"dist/tests/**/*.test.js\"",
+    "test:ui": "vitest run",
+    "test": "npm run build && npm run test:core && npm run test:ui",
+    "build:web": "vite build",
+    "verify": "npm run typecheck:ui && npm run test && echo \"VERDICT: ALL GREEN\""
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
     "@types/node": "^22.20.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^4.7.0",
     "fake-indexeddb": "^6.2.5",
-    "typescript": "^5.6.0"
+    "jsdom": "^26.1.0",
+    "typescript": "^5.6.0",
+    "vite": "^6.4.3",
+    "vitest": "^3.2.7"
+  },
+  "dependencies": {
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
   }
 }

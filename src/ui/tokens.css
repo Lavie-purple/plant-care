@@ -1,0 +1,202 @@
+/* ============================================================
+   设计 token · 方向 2 夜色（D-12）
+   暗色为默认，亮色为次选。以下 :root 段落是设计决策的最终形式。
+   ============================================================ */
+
+:root {
+  /* 间距。页面左右边距固定 16，全站唯一 */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-7: 32px;
+
+  /* 圆角。照片一律 0，卡片与控件 4，筛选 chip 99 */
+  --r-photo: 0;
+  --r-ctl: 4px;
+  --r-chip: 99px;
+
+  /* 动效。只动 transform 和 opacity */
+  --d-1: 120ms;
+  --d-2: 200ms;
+  --d-3: 320ms;
+  --e: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* 排版。中文思源黑体，拉丁与数字 Geist */
+  --fs-display: 28px;
+  --fs-title: 20px;
+  --fs-heading: 16px;
+  --fs-body: 14px;
+  --fs-label: 13px;
+  --fs-meta: 11px;
+  --lh-display: 32px;
+  --lh-title: 26px;
+  --lh-heading: 22px;
+  --lh-body: 21px;
+  --lh-label: 18px;
+  --lh-meta: 16px;
+  --font-sans: 'Geist', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'Geist Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+  /* 层级。只用四层 */
+  --z-nav: 10;
+  --z-sticky: 20;
+  --z-sheet: 40;
+  --z-modal: 60;
+
+  /* 暗色为默认（D-12：主要使用时刻是傍晚到夜间） */
+  color-scheme: dark;
+  --bg: #141613;
+  --sf: #1c1f1a;
+  --s2: #252a22;
+  --ln: #2e342a;
+  --ln2: #464e40;
+  --t1: #f2f4ee;
+  --t2: #aeb5a6;
+  --t3: #7a8274;
+  --acc: #8fc79b;
+  --acc-h: #a6d6af;
+  --acc-fg: #0e1a11;
+  --acc-soft: #1e2a1f;
+  --scrim: rgba(8, 10, 8, 0.72);
+  --shadow-pop: 0 8px 28px rgba(0, 0, 0, 0.5);
+}
+
+/* ============================================================
+   基础重置
+   ============================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--t1);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  -webkit-font-smoothing: antialiased;
+  transition: background var(--d-2) var(--e), color var(--d-2) var(--e);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* ============================================================
+   排版
+   ============================================================ */
+
+.t-display { font-size: var(--fs-display); line-height: var(--lh-display); font-weight: 600; letter-spacing: -0.6px; }
+.t-title { font-size: var(--fs-title); line-height: var(--lh-title); font-weight: 600; }
+.t-heading { font-size: var(--fs-heading); line-height: var(--lh-heading); font-weight: 600; }
+.t-body { font-size: var(--fs-body); line-height: var(--lh-body); }
+.t-label { font-size: var(--fs-label); line-height: var(--lh-label); }
+.t-meta { font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--t3); }
+.t-secondary { font-size: var(--fs-label); line-height: var(--lh-label); color: var(--t2); }
+
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   控件
+   ============================================================ */
+
+.btn {
+  border: 1px solid var(--ln2);
+  border-radius: var(--r-ctl);
+  padding: 6px 11px;
+  font-size: var(--fs-label);
+  line-height: var(--lh-label);
+  background: var(--sf);
+  color: var(--t1);
+  transition: background var(--d-1) var(--e), border-color var(--d-1) var(--e), transform var(--d-1) var(--e);
+}
+.btn:hover { background: var(--s2); border-color: var(--t3); }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.btn:disabled { opacity: 0.45; cursor: default; transform: none; }
+
+.btn-primary {
+  background: var(--acc);
+  color: var(--acc-fg);
+  border-color: var(--acc);
+  font-weight: 600;
+}
+.btn-primary:hover { background: var(--acc-h); border-color: var(--acc-h); }
+
+.btn-block { display: block; width: 100%; text-align: center; padding: 13px 0; font-size: var(--fs-heading); line-height: var(--lh-heading); font-weight: 600; }
+
+.chip {
+  border: 1px solid var(--ln2);
+  border-radius: var(--r-chip);
+  padding: 4px 11px;
+  font-size: var(--fs-label);
+  color: var(--t2);
+  white-space: nowrap;
+}
+.chip-on { border: 2px solid var(--t1); color: var(--t1); font-weight: 600; padding: 3px 10px; }
+
+/* ============================================================
+   卡片与状态
+   状态一律不靠颜色区分，靠边框形态：
+   2px 实线 = 该处理 / 1px 虚线 = 建议检查 / opacity .5 = 无需处理
+   ============================================================ */
+
+.card {
+  border: 1px solid var(--ln);
+  background: var(--sf);
+  border-radius: var(--r-ctl);
+  transition: border-color var(--d-1) var(--e);
+}
+.card-due { border: 2px solid var(--t1); padding: 1px; }
+.card-check { border: 1px dashed var(--ln2); }
+.card-rest { opacity: 0.5; }
+
+/* ============================================================
+   减弱动效
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+
+/* ============================================================
+   宽屏约束
+   5K 屏下内容拉满宽度会导致行长超过 150 字符，可读性崩坏。
+   正文限宽，行内元素可适度放宽。
+   ============================================================ */
+
+.app-main {
+  width: 100%;
+  margin: 0 auto;
+  max-width: 720px;
+}
+
+@media (min-width: 1024px) {
+  .app-main {
+    max-width: 860px;
+  }
+  /* 导航与内容同宽并居中，不加边框，避免和主内容区视觉断裂 */
+}

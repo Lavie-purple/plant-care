@@ -3,7 +3,15 @@
     "target": "ES2022",
     "module": "ES2022",
     "moduleResolution": "bundler",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "jsx": "react-jsx",
+    "types": [
+      "node"
+    ],
     "outDir": "dist",
     "rootDir": ".",
     "strict": true,
@@ -17,5 +25,12 @@
     "sourceMap": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts"]
+  "include": [
+    "src/domain/**/*.ts",
+    "src/engine/**/*.ts",
+    "src/weather/**/*.ts",
+    "src/storage/**/*.ts",
+    "src/app/**/*.ts",
+    "tests/*.ts"
+  ]
 }

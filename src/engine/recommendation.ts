@@ -81,6 +81,8 @@ export interface EngineInput {
 
 export interface EngineOutput {
   recommendation: Omit<Recommendation, 'id' | 'version' | 'userConfirmed'>;
+  /** 距上次浇水的天数，界面显示用。没有记录时为 undefined */
+  daysSince: number | undefined;
   /** 引擎算出的周期。用户设定与它不一致时，由调用方写 PendingRuleConflict。 */
   computedInterval: { min: number; max: number };
   /** 该不该提示用户「要不要调整周期」 */
@@ -157,6 +159,7 @@ export function generateRecommendation(input: EngineInput): EngineOutput {
     return finish('CHECK', 0.2, reasons, {
       plantId: plant.id,
       now,
+      daysSince,
       suggestedAction: '先记一次浇水，或手动设定一个周期',
       basedOn: {
         wateringCount: history.length,
@@ -273,39 +276,50 @@ export function generateRecommendation(input: EngineInput): EngineOutput {
   }
 
   // ---- 4. 判定 ----
-  const d = daysSince ?? 0;
-  const { min } = baseInterval;
-
   let action: Action;
-  if (d >= baseInterval.max) {
-    // 超出推荐周期上限。到了该动手的时点。
-    if (rainReliefDays > 0) {
-      action = 'DELAY';
-      delayDays = clamp(rainReliefDays, THRESHOLDS.DELAY_MIN_DAYS, THRESHOLDS.DELAY_MAX_DAYS);
-    } else {
-      action = 'WATER_NOW';
-    }
-  } else if (d >= baseInterval.min) {
-    // 刚进入推荐周期。此时浇水不算错但也谈不上该浇，建议先看盆土。
-    action = 'CHECK';
-  } else if (d >= baseInterval.min - THRESHOLDS.HEAT_ADVANCE_DAYS && heatPressureDays > 0) {
-    // 未到周期下限，但高温把窗口提前了
+  // 没有浇水记录 ≠ 0 天前浇过。早期版本把两者都当 d=0，
+  // 导致刚建档、从未浇过的植物被判为「无需处理」，
+  // 而这恰恰是用户最需要被提醒的情况（痛点第一条：记不住上次什么时候浇水）。
+  if (daysSince === undefined) {
     action = 'CHECK';
     reasons.push({
-      text: `距上次浇水 ${d} 天，未到 ${baseInterval.min} 天周期下限，但当前高温让盆土干得比平时快，建议先检查。`,
-      sourceId: last?.id ?? plant.id,
+      text: `这株植物还没有浇水记录，无法判断是否该浇。先记一次，或直接看盆土。${baseInterval.origin === 'user' ? `你设定的周期是 ${baseInterval.min} 到 ${baseInterval.max} 天。` : ''}`,
+      sourceId: plant.id,
       sourceKind: 'derived',
-      source: 'measured',
+      source: 'unknown',
     });
   } else {
-    action = 'NO_ACTION';
-    delayDays = undefined;
-    reasons.push({
-      text: `距上次浇水只有 ${d} 天，未到最短周期 ${baseInterval.min} 天，不建议现在浇水。`,
-      sourceId: last?.id ?? plant.id,
-      sourceKind: 'derived',
-      source: 'measured',
-    });
+    const d = daysSince;
+    if (d >= baseInterval.max) {
+      // 超出推荐周期上限。到了该动手的时点。
+      if (rainReliefDays > 0) {
+        action = 'DELAY';
+        delayDays = clamp(rainReliefDays, THRESHOLDS.DELAY_MIN_DAYS, THRESHOLDS.DELAY_MAX_DAYS);
+      } else {
+        action = 'WATER_NOW';
+      }
+    } else if (d >= baseInterval.min) {
+      // 刚进入推荐周期。此时浇水不算错但也谈不上该浇，建议先看盆土。
+      action = 'CHECK';
+    } else if (d >= baseInterval.min - THRESHOLDS.HEAT_ADVANCE_DAYS && heatPressureDays > 0) {
+      // 未到周期下限，但高温把窗口提前了
+      action = 'CHECK';
+      reasons.push({
+        text: `距上次浇水 ${d} 天，未到 ${baseInterval.min} 天周期下限，但当前高温让盆土干得比平时快，建议先检查。`,
+        sourceId: last?.id ?? plant.id,
+        sourceKind: 'derived',
+        source: 'measured',
+      });
+    } else {
+      action = 'NO_ACTION';
+      delayDays = undefined;
+      reasons.push({
+        text: `距上次浇水只有 ${d} 天，未到最短周期 ${baseInterval.min} 天，不建议现在浇水。`,
+        sourceId: last?.id ?? plant.id,
+        sourceKind: 'derived',
+        source: 'measured',
+      });
+    }
   }
 
   // ---- 5. 建议的周期 vs 用户设定 ----
@@ -326,6 +340,7 @@ export function generateRecommendation(input: EngineInput): EngineOutput {
   return finish(action, confidenceFor(action, history.length, weather.available), reasons, {
     plantId: plant.id,
     now,
+    daysSince,
     suggestedAction: suggestedText(action, delayDays),
     ...(delayDays !== undefined ? { suggestedDelayDays: delayDays } : {}),
     basedOn: {
@@ -437,6 +452,7 @@ function finish(
   extra: {
     plantId: EntityId;
     now: Date;
+    daysSince: number | undefined;
     suggestedAction: string;
     suggestedDelayDays?: number;
     basedOn: Recommendation['basedOn'];
@@ -461,6 +477,7 @@ function finish(
       ...(extra.suggestedDelayDays !== undefined ? { suggestedDelayDays: extra.suggestedDelayDays } : {}),
       basedOn: extra.basedOn,
     },
+    daysSince: extra.daysSince,
     computedInterval: extra.computedInterval ?? { min: 0, max: 0 },
     shouldPromptRuleChange: extra.shouldPromptRuleChange ?? false,
     ...(extra.ruleConflictReason !== undefined ? { ruleConflictReason: extra.ruleConflictReason } : {}),

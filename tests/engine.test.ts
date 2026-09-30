@@ -322,6 +322,31 @@ describe('补录队列：未完成的记录不参与判定（D-06）', () => {
   });
 });
 
+describe('没有浇水记录：这是最需要提醒的情况，不是无需处理', () => {
+  // 回归测试：曾经把「无记录」当成「0 天前浇过」，新植物被判为 NO_ACTION，
+  // 首屏显示「今天 0 盆要处理」。这与痛点第一条直接矛盾。
+  test('有养护规则但无记录 → CHECK，不是 NO_ACTION', () => {
+    const r = generateRecommendation(input({ history: [] }));
+    assert.equal(r.recommendation.action, 'CHECK');
+    assert.equal(r.recommendation.basedOn.wateringCount, 0);
+    const texts = r.recommendation.reasons.map((x) => x.text).join(' ');
+    assert.match(texts, /还没有浇水记录/);
+  });
+
+  test('无记录时理由必须说明这是未知，不是推断', () => {
+    const r = generateRecommendation(input({ history: [] }));
+    const r0 = r.recommendation.reasons.find((x) => /还没有浇水记录/.test(x.text));
+    assert.ok(r0);
+    assert.equal(r0.source, 'unknown', '无记录是事实缺失，不得标成 measured');
+  });
+
+  test('刚浇过水（0 天前）才是 NO_ACTION，两者必须区分', () => {
+    const justWatered = daysAgo(0);
+    const r = generateRecommendation(input({ history: [justWatered] }));
+    assert.equal(r.recommendation.action, 'NO_ACTION');
+  });
+});
+
 describe('变异检测：这些测试真的会红吗', () => {
   // 坏法 1：把用户设定让位给历史推断。弱断言「action 正确」会漏掉它。
   test('坏法：忽略用户设定，只用历史推断', () => {
