@@ -21,8 +21,8 @@ import type {
 } from '../domain/types.js';
 import { generateRecommendation, type EngineOutput } from '../engine/recommendation.js';
 import { Repository } from '../storage/repository.js';
+import { buildQueue, completeRecord, DEFAULT_PENDING_DAYS, type QueueItem } from './completionQueue.js';
 import { STORES } from '../storage/indexeddb.js';
-import { MockWeatherProvider, SCENARIOS } from '../weather/mock.js';
 import { toWeatherInput, type WeatherProvider } from '../weather/provider.js';
 import type { WeatherInput } from '../domain/types.js';
 
@@ -223,6 +223,32 @@ export class PlantCareService {
   /** 单株浇水历史，界面翻译来源说明时需要 */
   async wateringHistory(plantId: string): Promise<WateringRecord[]> {
     return this.repo.wateringHistory(plantId);
+  }
+
+  /**
+   * 待补全队列（D-06 X 方案）。
+   * 每次读取前先扫一次过期，避免队列无限堆积。
+   */
+  async completionQueue(): Promise<QueueItem[]> {
+    const plants = await this.listPlants();
+    const records = await this.repo.allPendingRecords();
+    return buildQueue({ plants, records, today: this.clock.now() });
+  }
+
+  /** 完成一条补录 */
+  async completeWatering(
+    recordId: string,
+    patch: { amountMl?: number; method?: WateringMethod; fertilizerIncluded?: boolean; notes?: string },
+  ): Promise<void> {
+    const r = await this.repo.get<WateringRecord>(STORES.wateringRecords, recordId);
+    if (!r) throw new Error();
+    const next = completeRecord({ record: r, ...patch, now: this.clock.now() });
+    await this.repo.forcePut<WateringRecord>(STORES.wateringRecords, next);
+  }
+
+  /** 把超期的待补全记录降级为「历史空白」。启动时调一次。 */
+  async sweepStalePending(): Promise<number> {
+    return this.repo.expireStalePending(DEFAULT_PENDING_DAYS, this.clock.now());
   }
 
   /** 单株植物，可能已删除 */

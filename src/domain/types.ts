@@ -193,10 +193,15 @@ export interface WateringRecord {
   images: EntityId[];
 
   /**
-   * 补录队列标记（D-06 X 方案）。
-   * D-06：超过 14 天未补全的自动移入「历史空白」，队列长度归零。
+   * 补录队列状态（D-06 X 方案）。
+   *
+   * complete = 已补全，正常参与统计与判定
+   * pending  = 待补全，快速批量记录的副产品。不参与判定与统计
+   * expired  = 历史空白。超过 pendingCompletionDays 仍未补全，
+   *            自动降级为「水量未知」，不再提示用户补。
+   *            这是队列长度的收敛机制，必须存在，否则队列无限堆积。
    */
-  completionState: 'complete' | 'pending';
+  completionState: 'complete' | 'pending' | 'expired';
   entrySource: 'bulk' | 'single';
 
   createdAt: ISODateTime;

@@ -304,6 +304,27 @@ export class Repository {
     return all.filter((c) => !c.resolvedAt).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 
+  /** 全部待补全记录，补录队列用。跨植物，按时间倒序 */
+  async allPendingRecords(): Promise<WateringRecord[]> {
+    const list = await this.byIndex<WateringRecord>(STORES.wateringRecords, 'by_completion', 'pending');
+    return list.sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`));
+  }
+
+  /** 把超过阈值的待补全记录降级为「历史空白」。返回实际降级条数。 */
+  async expireStalePending(olderThanDays: number, now: Date): Promise<number> {
+    const pending = await this.allPendingRecords();
+    const stale = pending.filter((r) => {
+      const [y, m, d] = r.date.split('-').map(Number);
+      const at = new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1);
+      return Math.floor((now.getTime() - at.getTime()) / 86_400_000) >= olderThanDays;
+    });
+    for (const r of stale) {
+      // 走 forcePut：这是系统级降级而非用户编辑，不参与乐观锁协商
+      await this.forcePut<WateringRecord>(STORES.wateringRecords, { ...r, completionState: 'expired' });
+    }
+    return stale.length;
+  }
+
   async decisionsFor(plantId: EntityId): Promise<DecisionLog[]> {
     return this.byIndex<DecisionLog>(STORES.decisionLogs, 'by_plant', plantId);
   }

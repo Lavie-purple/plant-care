@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Today } from './Today.js';
 import { PlantDetail } from './PlantDetail.js';
 import { Plants } from './Plants.js';
+import { CompleteQueue } from './CompleteQueue.js';
 import type { PlantCareService } from '../app/vertical-slice.js';
 
 const PAGES = [
@@ -17,14 +18,18 @@ export function App({ service }: { service: PlantCareService }) {
   const [page, setPage] = useState<PageKey>('today');
   // 详情页是 Today 页的下钻，不占用主导航位
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [inQueue, setInQueue] = useState(false);
 
   return (
     <div className="app">
       <main className="app-main">
-        {detailId && (
+        {inQueue && <CompleteQueue service={service} onDone={() => { setInQueue(false); }} />}
+        {!inQueue && detailId && (
           <PlantDetail service={service} plantId={detailId} onBack={() => setDetailId(null)} />
         )}
-        {!detailId && page === 'today' && <Today service={service} onOpenPlant={(id) => setDetailId(id)} />}
+        {!inQueue && !detailId && page === 'today' && (
+          <Today service={service} onOpenPlant={(id) => setDetailId(id)} onOpenQueue={() => setInQueue(true)} />
+        )}
         {!detailId && page === 'plants' && <Plants service={service} onOpenPlant={(id) => setDetailId(id)} />}
         {!detailId && page !== 'today' && page !== 'plants' && (
           <div style={{ padding: 24 }}>

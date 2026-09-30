@@ -253,3 +253,23 @@ describe('批量选择只在列表模式出现', () => {
     });
   });
 });
+
+describe('D-06 补录队列：待补全可被筛出', () => {
+  test('批量产生的记录能被「待补全」筛出', async () => {
+    const { svc, repo } = await setup();
+    const a = await svc.addPlant({ name: '龟背竹 A', placement: '客厅', exposure: 'indoor_window' });
+    await svc.recordWatering(a.id, { entrySource: 'bulk' });
+
+    const pending = await repo.allPendingRecords();
+    expect(pending.length).toBe(1);
+    expect(pending[0]?.entrySource).toBe('bulk');
+
+    render(<Plants service={svc} onOpenPlant={() => {}} />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: '待补全' }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/筛选出 1 \/ 1 盆/)).toBeTruthy();
+    });
+  });
+});

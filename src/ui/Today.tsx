@@ -9,6 +9,8 @@ export interface TodayProps {
   service: PlantCareService;
   /** 点击植物名进入详情页 */
   onOpenPlant?: (plantId: string) => void;
+  /** 打开补录队列 */
+  onOpenQueue?: () => void;
 }
 
 /**
@@ -17,12 +19,14 @@ export interface TodayProps {
  * 布局与视觉按 drafts/wireframe-today-2.html 的 L 方案，
  * 配色按 D-12 夜色暗色优先。
  */
-export function Today({ service, onOpenPlant }: TodayProps) {
+export function Today({ service, onOpenPlant, onOpenQueue }: TodayProps) {
   const [plants, setPlants] = useState<Plant[]>([]);
   const [entries, setEntries] = useState<{ plant: Plant; recommendation: EngineOutput['recommendation']; daysSince: number | undefined }[]>([]);
   const [weather, setWeather] = useState<WeatherInput | null>(null);
   const [sources, setSources] = useState<Map<string, SourceContext>>(new Map());
   const [conflicts, setConflicts] = useState<number>(0);
+  const [queueCount, setQueueCount] = useState(0);
+  const [queueExpiring, setQueueExpiring] = useState(0);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +51,10 @@ export function Today({ service, onOpenPlant }: TodayProps) {
       setEntries(next);
       setSources(srcMap);
       setConflicts(await service.countUnresolvedConflicts());
+      await service.sweepStalePending();
+      const q = await service.completionQueue();
+      setQueueCount(q.length);
+      setQueueExpiring(q.filter((x) => x.daysUntilExpire <= 3).length);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -137,6 +145,22 @@ export function Today({ service, onOpenPlant }: TodayProps) {
                 : '植物管理不受影响，建议可能不如平时准确'}
             </div>
           </div>
+        </div>
+      )}
+
+      {queueCount > 0 && (
+        <div className="notice" role="status">
+          <div style={{ flex: 1 }}>
+            <div className="t-label" style={{ fontWeight: 600 }}>
+              {queueCount} 条浇水记录待补全
+            </div>
+            <div className="t-meta" style={{ marginTop: 2 }}>
+              {queueExpiring > 0
+                ? `其中 ${queueExpiring} 条快到补全期限`
+                : '水量与方式是估算值，可以随时补'}
+            </div>
+          </div>
+          <button className="btn" type="button" onClick={() => onOpenQueue?.()}>去补全</button>
         </div>
       )}
 
