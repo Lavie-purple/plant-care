@@ -413,6 +413,8 @@ export interface Settings {
   /** D-13：18cm 盆 = 500ml，用户提供的经验基线 */
   baselinePotDiameterCm: number;
   baselineWaterMl: number;
+  /** 用户勾选了「以后按系统建议自动调整周期」 */
+  autoFollowConflicts: boolean;
   updatedAt: ISODateTime;
 }
 

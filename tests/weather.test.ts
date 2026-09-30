@@ -25,6 +25,7 @@ const SETTINGS: Settings = {
   pendingCompletionDays: 14,
   baselinePotDiameterCm: 18,
   baselineWaterMl: 500,
+  autoFollowConflicts: false,
   updatedAt: '2026-09-30T00:00:00+08:00',
 };
 
@@ -175,7 +176,7 @@ describe('OpenMeteoProvider：失败必须可远程诊断', () => {
     }
   });
 
-  test('网络层失败时错误信息里带 URL', async () => {
+  test('网络层失败时 message 是人话，URL 与原始错误留在 serverResponse', async () => {
     const failing = (async () => {
       throw new TypeError('Failed to fetch');
     }) as unknown as typeof fetch;
@@ -185,7 +186,11 @@ describe('OpenMeteoProvider：失败必须可远程诊断', () => {
       assert.fail('应当抛出');
     } catch (e) {
       assert.ok(e instanceof WeatherFetchError);
-      assert.match(e.message, /api\.open-meteo\.com/, '错误信息必须含 URL 以便定位');
+      // message 给界面看，必须是人话，不能把几百字符的查询串甩给用户
+      assert.match(e.message, /无法连接/);
+      assert.doesNotMatch(e.message, /\?latitude=/, 'message 里不该出现完整查询串');
+      // 远程诊断靠 serverResponse，URL 与原始错误都必须在
+      assert.match(e.serverResponse ?? '', /api\.open-meteo\.com/, 'serverResponse 必须含 URL 以便定位');
       assert.match(e.serverResponse ?? '', /Failed to fetch/);
     }
   });

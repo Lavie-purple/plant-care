@@ -431,6 +431,7 @@ describe('设置', () => {
       pendingCompletionDays: 14,
       baselinePotDiameterCm: 18,
       baselineWaterMl: 500,
+      autoFollowConflicts: false,
       updatedAt: '2026-09-30T00:00:00+08:00',
     };
     await repo.saveSettings(s);
@@ -451,6 +452,7 @@ describe('设置', () => {
       pendingCompletionDays: 14,
       baselinePotDiameterCm: 18,
       baselineWaterMl: 500,
+      autoFollowConflicts: false,
       updatedAt: '2026-09-30T00:00:00+08:00',
     };
     await repo.saveSettings(base);

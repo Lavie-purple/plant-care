@@ -12,6 +12,7 @@
 import type {
   CareRule,
   DecisionLog,
+  PendingRuleConflict,
   PlantEvent,
   Plant,
   Settings,
@@ -22,6 +23,7 @@ import type {
 import { generateRecommendation, type EngineOutput } from '../engine/recommendation.js';
 import { Repository } from '../storage/repository.js';
 import { buildQueue, completeRecord, DEFAULT_PENDING_DAYS, type QueueItem } from './completionQueue.js';
+import { decideConflict, markPrompted, resolveConflict, shouldPrompt, type Resolution } from './ruleConflict.js';
 import { DataTransferService } from '../data/DataTransferService.js';
 import { STORES } from '../storage/indexeddb.js';
 import { toWeatherInput, type WeatherProvider } from '../weather/provider.js';
@@ -38,6 +40,7 @@ export const DEFAULT_SETTINGS: Settings = {
   // D-13：用户提供的经验基线，非品种数据
   baselinePotDiameterCm: 18,
   baselineWaterMl: 500,
+  autoFollowConflicts: false,
   updatedAt: '2026-09-30T00:00:00+08:00',
 };
 
@@ -299,6 +302,70 @@ export class PlantCareService {
     return event;
   }
 
+  /**
+   * 生成建议，并在需要时记一条规则冲突。
+   *
+   * D-13：系统绝不擅自改 CareRule。这里只写 PendingRuleConflict，
+   * 改不改由用户通过 resolveRuleConflict 决定。
+   */
+  async recommendAndCheck(plantId: string, weather: WeatherInput): Promise<{ rec: EngineOutput; conflictCreated: boolean }> {
+    const rec = await this.recommend(plantId, weather);
+    if (!rec.shouldPromptRuleChange) return { rec, conflictCreated: false };
+
+    const plant = await this.repo.getPlant(plantId);
+    const rule = await this.repo.getCareRuleByPlant(plantId);
+    if (!plant || !rule) return { rec, conflictCreated: false };
+
+    const existing = await this.repo.unresolvedConflicts();
+    const all = await this.repo.getAll<PendingRuleConflict>(STORES.pendingConflicts);
+    const decision = decideConflict(
+      all,
+      {
+        plantId,
+        ruleId: rule.id,
+        computed: rec.computedInterval,
+        user: { min: rule.recommendedIntervalMin, max: rule.recommendedIntervalMax },
+        reason: rec.ruleConflictReason ?? '当前环境与你的周期设定不一致',
+        now: this.clock.now(),
+      },
+    );
+    void existing;
+    if (decision.action !== 'create') return { rec, conflictCreated: false };
+
+    await this.repo.put<PendingRuleConflict>(STORES.pendingConflicts, decision.conflict);
+    return { rec, conflictCreated: true };
+  }
+
+  /** 取出待弹窗的冲突，并标记为已问过（W3：同一 id 只弹一次） */
+  async takeConflictToPrompt(plantId: string): Promise<PendingRuleConflict | undefined> {
+    const all = await this.repo.getAll<PendingRuleConflict>(STORES.pendingConflicts);
+    const target = all.find(
+      (c) => c.plantId === plantId && shouldPrompt(c),
+    );
+    if (!target) return undefined;
+    const marked = markPrompted(target, this.clock.now());
+    await this.repo.put<PendingRuleConflict>(STORES.pendingConflicts, marked);
+    return marked;
+  }
+
+  /** 用户做出选择。只有 take-computed 才会写 CareRule。 */
+  async resolveRuleConflict(
+    conflictId: string,
+    mode: Resolution,
+  ): Promise<'keep-user' | 'take-computed'> {
+    const conflict = await this.repo.get<PendingRuleConflict>(STORES.pendingConflicts, conflictId);
+    if (!conflict) throw new Error('规则冲突不存在');
+    const rule = await this.repo.getCareRuleByPlant(conflict.plantId);
+    if (!rule) throw new Error('找不到对应的养护规则');
+
+    const r = resolveConflict(conflict, mode, rule, this.clock.now());
+    await this.repo.put<PendingRuleConflict>(STORES.pendingConflicts, r.conflict);
+    if (r.updatedRule) {
+      await this.repo.put<CareRule>(STORES.careRules, r.updatedRule);
+    }
+    return mode;
+  }
+
   /** 单株植物，可能已删除 */
   async getPlant(plantId: string): Promise<Plant | undefined> {
     return this.repo.getPlant(plantId);
@@ -334,9 +401,24 @@ export class PlantCareService {
     return this.repo.allPlants();
   }
 
-  /** 未解决的规则冲突条数，Today 页面顶部提醒条用 */
-  async countUnresolvedConflicts(): Promise<number> {
-    return (await this.repo.unresolvedConflicts()).length;
+  /**
+   * 自动跟随开关。存在 settings 里而不是内存——
+   * 放内存的话关掉页面就失效，用户会以为勾了没用。
+   */
+  async setAutoFollowConflicts(on: boolean): Promise<void> {
+    const s = await this.repo.getSettings();
+    if (!s) return;
+    await this.repo.saveSettings({ ...s, autoFollowConflicts: on });
+  }
+
+  async getAutoFollowConflicts(): Promise<boolean> {
+    const s = await this.repo.getSettings();
+    return s?.autoFollowConflicts ?? false;
+  }
+
+  /** 待确认的规则冲突，Today 页面提醒条与弹窗用 */
+  async listConflicts(): Promise<PendingRuleConflict[]> {
+    return this.repo.unresolvedConflicts();
   }
 
   /** 5. 生成建议。 */

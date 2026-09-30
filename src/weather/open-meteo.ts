@@ -90,8 +90,10 @@ export class OpenMeteoProvider implements WeatherProvider {
       res = await this.fetchImpl(url);
     } catch (e) {
       // 网络层失败：把原始错误带出去，不吞
-      throw new WeatherFetchError(this.name, `网络请求失败：${url}`, {
-        serverResponse: e instanceof Error ? `${e.name}: ${e.message}` : String(e),
+      // 完整 URL 与错误留在 serverResponse 里供远程诊断，
+      // 但 message 给界面看的是人话——把几百字符的查询串甩给用户没有意义。
+      throw new WeatherFetchError(this.name, '无法连接到天气服务', {
+        serverResponse: `GET ${url} -> ${e instanceof Error ? e.name + ': ' + e.message : String(e)}`,
       });
     }
 
@@ -99,7 +101,7 @@ export class OpenMeteoProvider implements WeatherProvider {
 
     if (!res.ok) {
       // AGENTS.md：任何非 2xx 必须回显服务端原文，便于远程诊断
-      throw new WeatherFetchError(this.name, `天气服务返回 ${res.status} ${res.statusText}`, {
+      throw new WeatherFetchError(this.name, `天气服务返回错误（${res.status}）`, {
         status: res.status,
         serverResponse: body,
       });
@@ -160,7 +162,10 @@ export class OpenMeteoProvider implements WeatherProvider {
     const observedMs = Number.isNaN(parsedObserved) ? now : parsedObserved;
 
     return {
-      id: `om-${observedMs}-${now}-${settings.latitude}`,
+      // 快照的身份是「这份天气数据」，不是「我什么时候抓的」。
+      // 早先 id 里带了 now，导致同一次观测的重复抓取产生不同 id，
+      // 缓存会堆积重复天气，latestWeatherSnapshot 也失去去重意义。
+      id: `om-${observedMs}-${settings.latitude}-${settings.longitude}`,
       city: settings.city,
       latitude: json.latitude,
       longitude: json.longitude,

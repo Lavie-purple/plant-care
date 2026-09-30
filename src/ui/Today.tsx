@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { Plant, WeatherInput } from '../domain/types.js';
+import type { PendingRuleConflict, Plant, WeatherInput } from '../domain/types.js';
 import type { EngineOutput } from '../engine/recommendation.js';
 import { buildTodayBoard, isBatchActionable, type Batch, type BatchItem } from '../app/batches.js';
+import { describeConflict } from '../app/ruleConflict.js';
 import type { PlantCareService } from '../app/vertical-slice.js';
 import { describeSource, isNavigable, type SourceContext } from './sourceLabel.js';
 
@@ -26,10 +27,11 @@ export function Today({ service, onOpenPlant, onOpenQueue, onAddPlant }: TodayPr
   const [entries, setEntries] = useState<{ plant: Plant; recommendation: EngineOutput['recommendation']; daysSince: number | undefined }[]>([]);
   const [weather, setWeather] = useState<WeatherInput | null>(null);
   const [sources, setSources] = useState<Map<string, SourceContext>>(new Map());
-  const [conflicts, setConflicts] = useState<number>(0);
+  const [conflicts, setConflicts] = useState<PendingRuleConflict[]>([]);
   const [queueCount, setQueueCount] = useState(0);
   const [queueExpiring, setQueueExpiring] = useState(0);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [conflictToShow, setConflictToShow] = useState<PendingRuleConflict | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,14 +47,14 @@ export function Today({ service, onOpenPlant, onOpenQueue, onAddPlant }: TodayPr
       const next: typeof entries = [];
       const srcMap = new Map<string, SourceContext>();
       for (const p of all) {
-        const r = await service.recommend(p.id, w);
-        next.push({ plant: p, recommendation: r.recommendation, daysSince: r.daysSince });
+        const { rec } = await service.recommendAndCheck(p.id, w);
+        next.push({ plant: p, recommendation: rec.recommendation, daysSince: rec.daysSince });
         const history = await service.wateringHistory(p.id);
         srcMap.set(p.id, { plant: p, history, ...(w.available ? { weather: w.snapshot } : {}) });
       }
       setEntries(next);
       setSources(srcMap);
-      setConflicts(await service.countUnresolvedConflicts());
+      setConflicts(await service.listConflicts());
       await service.sweepStalePending();
       const q = await service.completionQueue();
       setQueueCount(q.length);
@@ -166,14 +168,30 @@ export function Today({ service, onOpenPlant, onOpenQueue, onAddPlant }: TodayPr
         </div>
       )}
 
-      {conflicts > 0 && (
+      {conflicts.length > 0 && (
         <div className="notice" role="status">
           <div style={{ flex: 1 }}>
-            <div className="t-label" style={{ fontWeight: 600 }}>{conflicts} 条规则冲突等你确认</div>
+            <div className="t-label" style={{ fontWeight: 600 }}>
+              {conflicts.length} 条规则冲突等你确认
+            </div>
             <div className="t-meta" style={{ marginTop: 2 }}>系统不会自动改你的设置</div>
           </div>
-          <button className="btn" type="button">去看</button>
+          <button className="btn" type="button" onClick={() => setConflictToShow(conflicts[0] ?? null)}>
+            去看
+          </button>
         </div>
+      )}
+
+      {conflictToShow && (
+        <ConflictDialog
+          conflict={conflictToShow}
+          service={service}
+          onClose={() => setConflictToShow(null)}
+          onResolved={async () => {
+            setConflictToShow(null);
+            await reload();
+          }}
+        />
       )}
 
       {board.batches.map((batch) => (
@@ -364,5 +382,116 @@ function BatchSection({
         .batch-action { padding: var(--sp-2) var(--sp-4) var(--sp-4); }
       `}</style>
     </section>
+  );
+}
+
+/**
+ * 规则冲突确认弹窗（W3）。
+ *
+ * 唯一能改写 CareRule 的地方。两个要点：
+ *   1. 明确说「系统不会自动改」，让用户知道这个决定权在自己
+ *   2. 「以后按系统建议自动调整」默认不勾，勾了也要在设置里可关
+ */
+function ConflictDialog({
+  conflict,
+  service,
+  onClose,
+  onResolved,
+}: {
+  conflict: PendingRuleConflict;
+  service: PlantCareService;
+  onClose: () => void;
+  onResolved: () => Promise<void>;
+}) {
+  const [autoFollow, setAutoFollow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const d = describeConflict(conflict);
+  const plantId = conflict.plantId;
+
+  async function choose(mode: 'keep-user' | 'take-computed') {
+    setBusy(true);
+    setError(null);
+    try {
+      // W3：展示前先标记，保证同一 id 只问这一次
+      const marked = await service.takeConflictToPrompt(plantId);
+      const target = marked?.id === conflict.id ? marked : conflict;
+      await service.resolveRuleConflict(target.id, mode);
+      if (mode === 'take-computed' && autoFollow) {
+        // 勾了自动跟随就记下来：同类冲突不再询问。
+        // 存库而不是内存，否则关掉页面就失效，用户会以为勾了没用。
+        await service.setAutoFollowConflicts(true);
+      }
+      await onResolved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="mask" role="presentation" onClick={busy ? undefined : onClose} />
+      <div className="sheet" role="dialog" aria-label="规则冲突确认">
+        <div className="t-h">{d.headline}</div>
+
+        <div className="cmp">
+          <div className="cmp-cell">
+            <div className="t-meta">你设的</div>
+            <div className="cmp-n num">{d.userText}</div>
+          </div>
+          <div className="cmp-arrow mono" aria-hidden="true">→</div>
+          <div className="cmp-cell cmp-new">
+            <div className="t-meta">系统算的</div>
+            <div className="cmp-n num">{d.computedText}</div>
+          </div>
+        </div>
+
+        <div className="t-s" style={{ marginTop: 14 }}>{conflict.reason}</div>
+        <div className="t-meta" style={{ marginTop: 8 }}>
+          系统只是建议，<b style={{ color: 'var(--t1)' }}>不会自动改你的设置</b>。
+        </div>
+        <div className="t-meta" style={{ marginTop: 4 }}>创建于 {conflict.createdAt.slice(0, 16).replace('T', ' ')}</div>
+
+        <label className="auto">
+          <input type="checkbox" checked={autoFollow} onChange={(e) => setAutoFollow(e.target.checked)} />
+          <div>
+            <div className="t-label">以后这种情况按系统建议自动调整</div>
+            <div className="t-meta" style={{ marginTop: 2 }}>随时可以在设置里关掉</div>
+          </div>
+        </label>
+
+        {error && <div className="t-meta" style={{ color: 'var(--acc)', marginTop: 10 }}>{error}</div>}
+
+        <div className="acts">
+          <button className="btn" type="button" disabled={busy} onClick={() => void choose('keep-user')}>
+            保持 {d.userText}
+          </button>
+          <button className="btn btn-primary" type="button" disabled={busy} onClick={() => void choose('take-computed')}>
+            改成 {d.computedText}
+          </button>
+        </div>
+
+        <style>{`
+          .mask { position: fixed; inset: 0; background: var(--scrim); z-index: var(--z-sheet); }
+          .sheet {
+            position: fixed; left: 50%; transform: translateX(-50%);
+            bottom: calc(var(--nav-h) + 16px); z-index: var(--z-modal);
+            width: min(560px, calc(100vw - 32px));
+            background: var(--sf); border: 1px solid var(--ln2); border-radius: var(--r-ctl);
+            padding: var(--sp-4); box-shadow: var(--shadow-pop);
+          }
+          .cmp { display: flex; align-items: center; gap: var(--sp-3); margin-top: var(--sp-4); }
+          .cmp-cell { flex: 1; padding: 10px 12px; border: 1px solid var(--ln); border-radius: var(--r-ctl); }
+          .cmp-new { border: 2px solid var(--t1); }
+          .cmp-n { font-size: 17px; font-weight: 600; margin-top: 4px; }
+          .cmp-arrow { color: var(--t3); }
+          .auto { display: flex; gap: 10px; align-items: flex-start; margin-top: var(--sp-4); padding-top: var(--sp-4); border-top: 1px solid var(--ln); cursor: pointer; }
+          .auto input { margin-top: 3px; }
+          .acts { display: flex; gap: var(--sp-2); margin-top: var(--sp-4); }
+          .acts .btn { flex: 1; text-align: center; }
+        `}</style>
+      </div>
+    </>
   );
 }

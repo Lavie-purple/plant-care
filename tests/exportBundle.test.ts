@@ -254,7 +254,7 @@ describe('合并策略', () => {
           {
             city: '广州', latitude: 23.11667, longitude: 113.25, timezone: 'Asia/Shanghai',
             weatherRefreshMinutes: 30, pendingCompletionDays: 14,
-            baselinePotDiameterCm: 18, baselineWaterMl: 500, updatedAt: '2026-09-30T00:00:00+08:00',
+            baselinePotDiameterCm: 18, baselineWaterMl: 500, autoFollowConflicts: false, updatedAt: '2026-09-30T00:00:00+08:00',
           },
         ],
       }),
@@ -266,7 +266,7 @@ describe('合并策略', () => {
         {
           city: '广州', latitude: 1, longitude: 2, timezone: 'Asia/Shanghai',
           weatherRefreshMinutes: 60, pendingCompletionDays: 14,
-          baselinePotDiameterCm: 18, baselineWaterMl: 500, updatedAt: '2026-09-29T00:00:00+08:00',
+          baselinePotDiameterCm: 18, baselineWaterMl: 500, autoFollowConflicts: false, updatedAt: '2026-09-29T00:00:00+08:00',
         },
       ],
     };
