@@ -109,3 +109,24 @@ npm test                                    # 确认还原
    `open()` 阻塞在 `onupgradeneeded`。加 `afterEach` 统一关闭后降到 385 毫秒。
 3. **`saveWeatherSnapshot` 是 O(n²)**。每次保存都 `getAll` + 全表排序，存 200 条要扫 200 次。
    按 AGENTS.md「禁止 O(n²)」改为先 `count`，不超量直接返回（O(1)）。
+
+---
+
+## 最小垂直闭环（第四批）
+
+| 注入的坏法 | 结果 | 保护的规则 |
+|---|---|---|
+| `confirm` 时不论什么动作都落 WateringRecord | 闭环测试红 | Reminder 不等于 Record，确认动作才产生记录 |
+| 断网时回落到缓存并当作新数据返回 | 2 个测试变红 | **D-14：不得假装数据是实时的** |
+| 把暴露度 rainFactor 全部设为 1 | 引擎测试红 | D-03 |
+
+### 演示脚本抓出的真 bug
+
+`scripts/demo-loop.mjs` 打印真实输出时发现：`loadWeather()` 在 Provider 失败后
+回落到 `latestWeatherSnapshot()` 并当作可用数据返回。用户断网后会拿到几分钟前的
+天气，却以为拿到了新的。这违反 D-14「不得假装是实时的」。
+
+修复：fetch 失败一律返回 `unavailable`，缓存改由界面层显式调用 `readCachedWeather()`
+展示，且必须带 `lastSuccessAt` 让用户知道数据有多旧。
+
+**这个 bug 是靠「把真实输出打印给人看」发现的，任何绿测都测不出来。**
