@@ -51,9 +51,23 @@ async function seed() {
   await svc.confirm(a.id, 'rec-1', 'delay');
   await svc.confirm(b.id, 'rec-2', 'watered');
 
+  // 真的存一张图片，事件引用它的真实 id。
+  // 以前这里写死 'img-1' 而库里没有对应图片，导入会被静默接受并产生碎图。
+  const img = await repo.putImage({
+    hash: 'a1b2c3d4e5f60718',
+    blob: new Blob([new Uint8Array(256)], { type: 'image/webp' }),
+    fileName: 'img-a1b2c3d4e5f60718.webp',
+    mimeType: 'image/webp',
+    bytes: 256,
+    width: 800,
+    height: 600,
+    originalBytes: 1024,
+    createdAt: '2026-09-18T10:00:00+08:00',
+  });
+
   await repo.put(STORES.plantEvents, {
     id: 'e1', plantId: a.id, type: 'PHOTO', date: '2026-09-18',
-    title: '新叶展开', images: ['img-1'], metadata: {}, createdAt: '2026-09-18T10:00:00+08:00', version: 1,
+    title: '新叶展开', images: [img.id], metadata: {}, createdAt: '2026-09-18T10:00:00+08:00', version: 1,
   });
 
   return { repo, svc, a, b };
@@ -68,7 +82,7 @@ describe('往返：导出 → 校验 → 导回新库', () => {
     // 新库
     const dstRepo = await newRepo();
     const dstTransfer = new DataTransferService(dstRepo, CLOCK);
-    await dstTransfer.commitImport(JSON.parse(JSON.stringify(bundle)), 'replace');
+    await dstTransfer.commitImport(JSON.parse(JSON.stringify(bundle)), await src.repo.allImages(), 'replace');
 
     const plants = await dstRepo.allPlants();
     assert.equal(plants.length, 2);
@@ -90,6 +104,7 @@ describe('往返：导出 → 校验 → 导回新库', () => {
     const dstRepo = await newRepo();
     await new DataTransferService(dstRepo, CLOCK).commitImport(
       JSON.parse(JSON.stringify(bundle)),
+      await src.repo.allImages(),
       'replace',
     );
 
@@ -108,6 +123,7 @@ describe('往返：导出 → 校验 → 导回新库', () => {
     const dstRepo = await newRepo();
     await new DataTransferService(dstRepo, CLOCK).commitImport(
       JSON.parse(JSON.stringify(bundle)),
+      await src.repo.allImages(),
       'replace',
     );
 
@@ -116,7 +132,14 @@ describe('往返：导出 → 校验 → 导回新库', () => {
     const timeline = await dstRepo.growthTimeline(aId);
     assert.equal(timeline.length, 1);
     assert.equal(timeline[0]?.type, 'PHOTO');
-    assert.deepEqual(timeline[0]?.images, ['img-1'], '图片引用不能丢');
+    // id 是按内容哈希生成的，不是我们随便起的名字
+    assert.equal(timeline[0]?.images.length, 1, '图片引用不能丢');
+    const imgId = timeline[0]?.images[0] ?? '';
+    assert.match(imgId, /^img-[0-9a-f]{16}$/, '图片 id 应由内容哈希生成');
+    const restored = await dstRepo.getImage(imgId);
+    assert.ok(restored, '导回后图片本体必须真的在库里，不能只有引用');
+    assert.equal(restored?.bytes, 256, '图片字节数要一致');
+    assert.equal(restored?.width, 800);
   });
 
   test('决定日志保留，闭环历史不断', async () => {
@@ -126,6 +149,7 @@ describe('往返：导出 → 校验 → 导回新库', () => {
     const dstRepo = await newRepo();
     await new DataTransferService(dstRepo, CLOCK).commitImport(
       JSON.parse(JSON.stringify(bundle)),
+      await src.repo.allImages(),
       'replace',
     );
 
@@ -141,7 +165,7 @@ describe('往返：导出 → 校验 → 导回新库', () => {
     const b1 = await new DataTransferService(src.repo, CLOCK).collect();
 
     const mid = await newRepo();
-    await new DataTransferService(mid, CLOCK).commitImport(JSON.parse(JSON.stringify(b1)), 'replace');
+    await new DataTransferService(mid, CLOCK).commitImport(JSON.parse(JSON.stringify(b1)), await src.repo.allImages(), 'replace');
     const b2 = await new DataTransferService(mid, CLOCK).collect();
 
     assert.deepEqual(b2.data.plants, b1.data.plants);
@@ -171,7 +195,7 @@ describe('导入拒绝：绝不半途写入', () => {
       },
     } as unknown as ExportBundle;
 
-    await assert.rejects(() => transfer.commitImport(bad, 'replace'), /未通过校验/);
+    await assert.rejects(() => transfer.commitImport(bad, [], 'replace'), /未通过校验/);
     // 库里必须还是空的
     assert.equal((await dstRepo.allPlants()).length, 0);
   });
@@ -183,7 +207,7 @@ describe('导入拒绝：绝不半途写入', () => {
 
     const dstRepo = await newRepo();
     await assert.rejects(
-      () => new DataTransferService(dstRepo, CLOCK).commitImport(bundle, 'replace'),
+      () => new DataTransferService(dstRepo, CLOCK).commitImport(bundle, [], 'replace'),
       /未通过校验/,
     );
     assert.equal((await dstRepo.allPlants()).length, 0);
@@ -199,10 +223,11 @@ describe('导入拒绝：绝不半途写入', () => {
     assert.equal((await dstRepo.allPlants()).length, 1);
 
     const transfer = new DataTransferService(dstRepo, CLOCK);
-    await transfer.commitImport(bundle, 'merge');
+    const srcImages = await src.repo.allImages();
+    await transfer.commitImport(bundle, srcImages, 'merge');
     assert.equal((await dstRepo.allPlants()).length, 3, 'merge 后原有 1 盆 + 导入 2 盆');
 
-    await transfer.commitImport(bundle, 'replace');
+    await transfer.commitImport(bundle, srcImages, 'replace');
     assert.equal((await dstRepo.allPlants()).length, 2, 'replace 后只剩导入的 2 盆');
   });
 
@@ -213,12 +238,48 @@ describe('导入拒绝：绝不半途写入', () => {
     const dstRepo = await newRepo();
     const transfer = new DataTransferService(dstRepo, CLOCK);
     // 第一次是全新增
-    const first = await transfer.commitImport(bundle, 'merge');
+    const srcImages = await src.repo.allImages();
+    const first = await transfer.commitImport(bundle, srcImages, 'merge');
     assert.equal(first.skipped, 0);
     // 第二次全部重复
-    const second = await transfer.commitImport(bundle, 'merge');
+    const second = await transfer.commitImport(bundle, srcImages, 'merge');
     assert.ok(second.skipped > 0, '重复导入必须报告跳过数');
     assert.equal((await dstRepo.allPlants()).length, 2, '重复导入不得产生副本');
+  });
+});
+
+describe('图片引用完整性：缺图必须拒绝（D-18）', () => {
+  test('引用了不存在的图片时拒绝导入，不产生碎图', async () => {
+    const src = await seed();
+    const bundle = JSON.parse(JSON.stringify(await new DataTransferService(src.repo, CLOCK).collect()));
+    const images = await src.repo.allImages();
+    assert.ok(images.length > 0, '前提：备份里确实有图片');
+
+    // 模拟 images/ 目录丢了：data.json 还在，但图片文件没了
+    const dstRepo = await newRepo();
+    await assert.rejects(
+      () => new DataTransferService(dstRepo, CLOCK).commitImport(bundle, [], 'replace'),
+      /张照片找不到/,
+    );
+    // 库里必须还是空的，绝不能导进去一堆指向不存在图片的记录
+    assert.equal((await dstRepo.allPlants()).length, 0);
+    assert.equal((await dstRepo.allImages()).length, 0, '缺图的导入不得留下任何图片记录');
+  });
+
+  test('清单里的图片数与实际一致', async () => {
+    const src = await seed();
+    const bundle = await new DataTransferService(src.repo, CLOCK).collect();
+    assert.equal(bundle.images.length, 1);
+    assert.equal(bundle.counts.images, 1);
+    assert.equal(bundle.images[0]?.bytes, 256);
+  });
+
+  test('图片清单不含二进制，data.json 保持可读', async () => {
+    const src = await seed();
+    const bundle = await new DataTransferService(src.repo, CLOCK).collect();
+    assert.equal((bundle.images[0] as unknown as Record<string, unknown>).blob, undefined);
+    const json = JSON.stringify(bundle);
+    assert.ok(json.length < 50_000, 'data.json 不应因为图片而膨胀');
   });
 });
 

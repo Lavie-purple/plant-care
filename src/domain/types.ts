@@ -415,3 +415,58 @@ export interface Settings {
   baselineWaterMl: number;
   updatedAt: ISODateTime;
 }
+
+
+// ============================================================
+// 图片
+// ============================================================
+
+/**
+ * 图片记录。
+ *
+ * 二进制存在 IndexedDB，导出时写入 images/ 目录。
+ * data.json 只带元数据，保持可读可 diff；图片不塞进 JSON（几千张图会让
+ * base64 后的 JSON 膨胀到几百 MB，且无法 diff）。
+ */
+export interface ImageRecord {
+  id: EntityId;
+  /** 内容哈希。同内容只存一份，重复上传不占空间 */
+  hash: string;
+  blob: Blob;
+  /** 落盘时的扩展名，由 mimeType 决定 */
+  fileName: string;
+  mimeType: string;
+  bytes: number;
+  width: number;
+  height: number;
+  /** 原始文件大小，压缩后变小是正常的，界面上要能看到 */
+  originalBytes: number;
+  createdAt: ISODateTime;
+  version: number;
+}
+
+/** 压缩参数。写死在这里，界面上不得另立一套。 */
+export const IMAGE_COMPRESSION = {
+  /** 长边上限。手机直出照片普遍 4000px+，缩到 1600 足够看清叶片状态 */
+  maxEdge: 1600,
+  /** 质量。0.82 在体积与观感之间较平衡 */
+  quality: 0.82,
+  /** 超过这个大小才压缩，避免小图被二次劣化 */
+  minBytesToCompress: 200 * 1024,
+  /** 优先格式。WebP 体积约为 JPEG 的 70%，不支持时回退 JPEG */
+  preferredMime: 'image/webp',
+  fallbackMime: 'image/jpeg',
+} as const;
+
+/** data.json 里带的图片清单，不含二进制 */
+export interface ImageManifestEntry {
+  id: EntityId;
+  fileName: string;
+  mimeType: string;
+  bytes: number;
+  width: number;
+  height: number;
+  hash: string;
+  originalBytes: number;
+  createdAt: ISODateTime;
+}

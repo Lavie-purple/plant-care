@@ -11,6 +11,7 @@ import type {
   CareRule,
   DecisionLog,
   EntityId,
+  ImageRecord,
   Plant,
   PlantEvent,
   PendingRuleConflict,
@@ -323,6 +324,29 @@ export class Repository {
       await this.forcePut<WateringRecord>(STORES.wateringRecords, { ...r, completionState: 'expired' });
     }
     return stale.length;
+  }
+
+  /**
+   * 存图片。同 hash 已存在则直接返回旧记录，不重复占用空间。
+   * 返回的记录带 id，调用方把它挂到 coverImageId / images 数组上。
+   */
+  async putImage(input: Omit<ImageRecord, 'id' | 'version'>): Promise<ImageRecord> {
+    const existing = await this.getByImageHash(input.hash);
+    if (existing) return existing;
+    return this.put<ImageRecord>(STORES.images, { ...input, id: 'img-' + input.hash, version: 0 });
+  }
+
+  async getImage(id: string): Promise<ImageRecord | undefined> {
+    return this.get<ImageRecord>(STORES.images, id);
+  }
+
+  async allImages(): Promise<ImageRecord[]> {
+    return this.getAll<ImageRecord>(STORES.images);
+  }
+
+  private async getByImageHash(hash: string): Promise<ImageRecord | undefined> {
+    const all = await this.allImages();
+    return all.find((i) => i.hash === hash);
   }
 
   async decisionsFor(plantId: EntityId): Promise<DecisionLog[]> {

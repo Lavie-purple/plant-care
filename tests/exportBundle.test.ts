@@ -64,6 +64,7 @@ function input(over: Partial<ExportInput> = {}): ExportInput {
     pendingConflicts: [],
     decisionLogs: [],
     settings: [],
+    images: [],
     now: NOW,
     ...over,
   };
