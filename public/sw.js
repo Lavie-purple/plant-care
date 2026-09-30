@@ -51,6 +51,12 @@ function loadBase() {
         BASE = cfg.base.charAt(cfg.base.length - 1) === '/' ? cfg.base : cfg.base + '/';
         SHELL_ASSETS = shellList();
       }
+      // 版本变了就换一个缓存名，旧缓存在 activate 时被清掉。
+      // 这是修「用户一直跑上一个构建」的关键：写死版本号时，
+      // 浏览器认为 SW 没更新，旧缓存也不失效。
+      if (cfg && typeof cfg.__PLANT_VERSION__ === 'string' && cfg.__PLANT_VERSION__) {
+        CACHE_NAME = 'plant-manager-' + cfg.__PLANT_VERSION__;
+      }
     });
 }
 

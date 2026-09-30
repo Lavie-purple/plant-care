@@ -110,9 +110,15 @@ describe('缓存清单', () => {
     assert.ok(SHELL_ASSETS.some((a) => a.includes('manifest')));
   });
 
-  test('缓存名带版本号，改策略后能失效旧缓存', () => {
-    assert.ok(CACHE_NAME.includes(CACHE_VERSION));
-    assert.match(CACHE_VERSION, /^v\d+$/);
+  test('缓存版本不再写死，由构建期内容哈希注入', () => {
+    // 回归：版本号曾写死成 v1，结果改代码后版本不变，浏览器认为 SW 没更新，
+    // 旧缓存也不失效，用户会一直跑上一个构建的代码，且没有任何报错。
+    const sw = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'public', 'sw.js'),
+      'utf8',
+    );
+    assert.ok(!/CACHE_VERSION\s*=\s*'v\d+'/.test(sw), 'sw.js 里不应再有写死的版本号');
+    assert.ok(sw.includes('__PLANT_VERSION__'), 'sw.js 必须读取构建期注入的版本');
   });
 });
 
@@ -139,8 +145,12 @@ describe('service worker 与策略模块保持一致', () => {
     assert.ok(src.includes(PRECACHE_PREFIX), 'sw.js 的预缓存前缀与策略模块不一致');
   });
 
-  test('缓存版本一致', () => {
-    assert.ok(src.includes(CACHE_VERSION), 'sw.js 的缓存版本与策略模块不一致');
+  test('缓存名由构建期版本决定，不写死', () => {
+    assert.ok(
+      src.includes("CACHE_NAME = 'plant-manager-pending'"),
+      'sw.js 启动时用的应是占位名，随后被构建期版本替换',
+    );
+    assert.ok(src.includes('__PLANT_VERSION__'), '必须读构建期注入的版本');
   });
 
   test('天气请求确实走 network-only 而不是被缓存', () => {
