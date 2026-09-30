@@ -7,6 +7,8 @@ import { describeSource, isNavigable, type SourceContext } from './sourceLabel.j
 
 export interface TodayProps {
   service: PlantCareService;
+  /** 点击植物名进入详情页 */
+  onOpenPlant?: (plantId: string) => void;
 }
 
 /**
@@ -15,7 +17,7 @@ export interface TodayProps {
  * 布局与视觉按 drafts/wireframe-today-2.html 的 L 方案，
  * 配色按 D-12 夜色暗色优先。
  */
-export function Today({ service }: TodayProps) {
+export function Today({ service, onOpenPlant }: TodayProps) {
   const [plants, setPlants] = useState<Plant[]>([]);
   const [entries, setEntries] = useState<{ plant: Plant; recommendation: EngineOutput['recommendation']; daysSince: number | undefined }[]>([]);
   const [weather, setWeather] = useState<WeatherInput | null>(null);
@@ -163,6 +165,7 @@ export function Today({ service }: TodayProps) {
           }
           onWaterAll={() => waterAll(batch.items)}
           onWaterOne={(id) => waterOne(id)}
+          onOpenPlant={onOpenPlant}
           sources={sources}
           busy={busy}
         />
@@ -208,6 +211,7 @@ function BatchSection({
   onToggle,
   onWaterAll,
   onWaterOne,
+  onOpenPlant,
   sources,
   busy,
 }: {
@@ -216,6 +220,7 @@ function BatchSection({
   onToggle: (id: string) => void;
   onWaterAll: () => void;
   onWaterOne: (plantId: string) => void;
+  onOpenPlant?: ((plantId: string) => void) | undefined;
   sources: Map<string, SourceContext>;
   busy: boolean;
 }) {
@@ -244,7 +249,14 @@ function BatchSection({
               <div className="item-row">
                 <div className="photo" aria-hidden="true" />
                 <div className="item-info">
-                  <div className="t-label" style={{ fontWeight: 600 }}>{item.plant.name}</div>
+                  <button
+                    className="t-label plant-name"
+                    type="button"
+                    onClick={() => onOpenPlant?.(item.plant.id)}
+                    disabled={!onOpenPlant}
+                  >
+                    {item.plant.name}
+                  </button>
                   <div className="t-meta num">
                     {item.intervalText}　{item.plant.placement}
                   </div>
@@ -308,6 +320,9 @@ function BatchSection({
         .item-row { display: flex; align-items: center; gap: var(--sp-3); padding: 9px; }
         .photo { width: 46px; height: 46px; flex: 0 0 auto; background: var(--s2); border-radius: var(--r-ctl); }
         .item-info { flex: 1; min-width: 0; }
+        .plant-name { background: none; border: none; padding: 0; font-weight: 600; color: var(--t1); text-align: left; }
+        .plant-name:not(:disabled):hover { text-decoration: underline; }
+        .plant-name:disabled { cursor: default; }
         .reasons { padding: var(--sp-3); border-top: 1px dashed var(--ln); background: var(--bg); }
         .reason { padding: 6px 0; }
         .batch-action { padding: var(--sp-2) var(--sp-4) var(--sp-4); }

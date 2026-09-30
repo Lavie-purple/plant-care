@@ -56,6 +56,22 @@ export interface ExposureProfile {
 }
 
 /** D-02：光照是静态枚举字段，会随季节和位置变化而过期，这是已接受的取舍。 */
+/** 暴露度的人类可读说明。枚举值是英文，界面上不得直接显示。 */
+export const EXPOSURE_LABEL: Record<Exposure, string> = {
+  indoor: '室内',
+  indoor_window: '室内靠窗',
+  semi_outdoor: '半户外',
+  outdoor: '露天',
+};
+
+/** 暴露度的详细说明，界面上用于解释天气为何这样影响这株植物 */
+export const EXPOSURE_DESC: Record<Exposure, string> = {
+  indoor: '不直接受降雨影响',
+  indoor_window: '靠窗，可能接到少量飘雨',
+  semi_outdoor: '下雨会被淋到',
+  outdoor: '完全暴露在户外',
+};
+
 export const LIGHT_PROFILES = ['直射强', '直射中', '散射', '补光'] as const;
 export type LightProfile = (typeof LIGHT_PROFILES)[number];
 

@@ -9,6 +9,7 @@
  *   4. 天气不可用时降级运行，显式标记 weatherUnavailable，绝不假装有数据。
  */
 
+import { EXPOSURE_LABEL } from '../domain/types.js';
 import type {
   Action,
   CareRule,
@@ -211,7 +212,7 @@ export function generateRecommendation(input: EngineInput): EngineOutput {
 
     reasons.push({
       text:
-        `当前 ${w.temperature}°C，相对湿度 ${w.humidity}%，${plant.exposure === 'indoor' || plant.exposure === 'indoor_window' ? '该位置在室内或靠窗，不直接受降雨影响' : `该位置为${exposureLabel(plant.exposure)}，受降雨影响系数 ${profile.rainFactor}`}。`,
+        `当前 ${w.temperature}°C，相对湿度 ${w.humidity}%，${plant.exposure === 'indoor' || plant.exposure === 'indoor_window' ? '该位置在室内或靠窗，不直接受降雨影响' : `该位置为${EXPOSURE_LABEL[plant.exposure]}，受降雨影响系数 ${profile.rainFactor}`}。`,
       sourceId: w.id,
       sourceKind: 'weather',
       source: 'measured',
@@ -405,10 +406,6 @@ function median(nums: number[]): number {
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, n));
-}
-
-function exposureLabel(e: Exposure): string {
-  return { indoor: '室内', indoor_window: '室内靠窗', semi_outdoor: '半户外', outdoor: '露天' }[e];
 }
 
 function confidenceFor(action: Action, samples: number, weatherAvailable: boolean): number {

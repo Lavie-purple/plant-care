@@ -12,6 +12,7 @@
 import type {
   CareRule,
   DecisionLog,
+  PlantEvent,
   Plant,
   Settings,
   UserAction,
@@ -222,6 +223,36 @@ export class PlantCareService {
   /** 单株浇水历史，界面翻译来源说明时需要 */
   async wateringHistory(plantId: string): Promise<WateringRecord[]> {
     return this.repo.wateringHistory(plantId);
+  }
+
+  /** 单株植物，可能已删除 */
+  async getPlant(plantId: string): Promise<Plant | undefined> {
+    return this.repo.getPlant(plantId);
+  }
+
+  /** 当前时刻。统计区间需要它，界面层不应访问私有 clock */
+  now(): Date {
+    return this.clock.now();
+  }
+
+  /** 单株全部事件，详情页「记录」tab 用 */
+  async events(plantId: string): Promise<PlantEvent[]> {
+    return this.repo.plantEvents(plantId);
+  }
+
+  /** 成长时间线（D-08：PlantEvent 的一个视图，不是独立表） */
+  async timeline(plantId: string): Promise<PlantEvent[]> {
+    return this.repo.growthTimeline(plantId);
+  }
+
+  /** 决定日志，「统计」tab 的行为数据来源 */
+  async decisions(plantId: string): Promise<DecisionLog[]> {
+    return this.repo.decisionsFor(plantId);
+  }
+
+  /** 养护规则，可能未设置 */
+  async careRule(plantId: string): Promise<CareRule | undefined> {
+    return this.repo.getCareRuleByPlant(plantId);
   }
 
   /** 列出全部植物 */

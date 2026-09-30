@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Today } from './Today.js';
+import { PlantDetail } from './PlantDetail.js';
 import type { PlantCareService } from '../app/vertical-slice.js';
 
 const PAGES = [
@@ -13,11 +14,16 @@ type PageKey = (typeof PAGES)[number]['key'];
 
 export function App({ service }: { service: PlantCareService }) {
   const [page, setPage] = useState<PageKey>('today');
+  // 详情页是 Today 页的下钻，不占用主导航位
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   return (
     <div className="app">
       <main className="app-main">
-        {page === 'today' && <Today service={service} />}
+        {detailId && (
+          <PlantDetail service={service} plantId={detailId} onBack={() => setDetailId(null)} />
+        )}
+        {!detailId && page === 'today' && <Today service={service} onOpenPlant={(id) => setDetailId(id)} />}
         {page !== 'today' && (
           <div style={{ padding: 24 }}>
             <div className="t-secondary">{PAGES.find((p) => p.key === page)?.label} 页面尚未实现</div>
