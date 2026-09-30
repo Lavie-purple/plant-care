@@ -7,14 +7,16 @@ import { App } from './App.js';
 import './tokens.css';
 
 /**
- * 不再预置示例植物。
+ * 不预置示例植物。
  *
- * 早先这里会写死两盆「龟背竹 A」「薄荷」当演示数据。它在开发时掩盖过真实问题，
- * 而且在库还没加载完的瞬间会被误判成「空库」而覆盖用户数据。
- * 示例数据属于测试夹具（见 tests/），不属于生产代码。
+ * 早先这里会写死两盆示例数据。它掩盖过真实问题，而且在库还没加载完的瞬间
+ * 会被误判成「空库」而覆盖用户数据。示例数据属于测试夹具（见 tests/）。
  *
- * 启动失败必须显示给人看。早先 open() 失败时这里直接 reject，
- * 页面表现为一片黑屏且没有任何提示，用户无从下手。
+ * 启动失败必须显示给人看。早先 open() 失败时页面是一片黑屏，
+ * 用户既看不到信息也拿不到错误。
+ *
+ * 这里刻意不用顶层 await：Vite 默认的构建目标不支持，
+ * 用了生产构建直接失败。
  */
 const mount = document.getElementById('root');
 if (!mount) throw new Error('缺少 #root 挂载点');
@@ -40,19 +42,19 @@ function fatal(message: string, detail?: unknown): void {
 }
 
 const repo = new Repository();
-try {
-  await repo.open();
-} catch (e) {
-  fatal(
-    '本地数据库打不开。你的数据全部存在这台设备的浏览器里，请检查浏览器的隐私模式或存储权限。',
-    e instanceof Error ? e.message : String(e),
-  );
-  throw e;
-}
-
-const service = new PlantCareService(repo, new OpenMeteoProvider(), systemClock());
-createRoot(root).render(
-  <StrictMode>
-    <App service={service} />
-  </StrictMode>,
-);
+repo
+  .open()
+  .then(() => {
+    const service = new PlantCareService(repo, new OpenMeteoProvider(), systemClock());
+    createRoot(root).render(
+      <StrictMode>
+        <App service={service} />
+      </StrictMode>,
+    );
+  })
+  .catch((e: unknown) => {
+    fatal(
+      '本地数据库打不开。你的数据全部存在这台设备的浏览器里，请检查浏览器的隐私模式或存储权限。',
+      e instanceof Error ? e.message : String(e),
+    );
+  });

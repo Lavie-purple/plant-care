@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#141613"/>
+  <!-- maskable：安全区是中心 80%，所以图案整体缩小到 ~64% 并居中 -->
+  <g transform="translate(256 256) scale(0.62) translate(-256 -256)">
+    <path d="M256 288 C 200 288, 152 244, 152 186 C 210 186, 256 226, 256 288 Z" fill="#4E7C5C"/>
+    <path d="M256 288 C 312 288, 360 244, 360 186 C 302 186, 256 226, 256 288 Z" fill="#6E9E7C"/>
+    <path d="M256 288 C 216 244, 210 176, 256 130 C 302 176, 296 244, 256 288 Z" fill="#8FC79B"/>
+    <rect x="249" y="284" width="14" height="52" fill="#5C8668"/>
+    <path d="M186 336 L 326 336 L 306 424 L 206 424 Z" fill="#8A6A4F"/>
+    <rect x="178" y="322" width="156" height="20" rx="4" fill="#A07C5C"/>
+  </g>
+</svg>

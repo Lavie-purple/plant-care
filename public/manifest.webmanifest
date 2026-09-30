@@ -1,0 +1,47 @@
+{
+  "name": "个人植物管理与养护助手",
+  "short_name": "植物养护",
+  "description": "结合植物、历史与天气，判断今天该处理哪几盆。",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#141613",
+  "theme_color": "#141613",
+  "categories": ["lifestyle", "productivity"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "今日养护",
+      "short_name": "今日",
+      "url": "/?page=today",
+      "description": "查看今天需要处理哪几盆"
+    },
+    {
+      "name": "我的植物",
+      "short_name": "植物",
+      "url": "/?page=plants",
+      "description": "浏览与筛选全部植物"
+    },
+    {
+      "name": "导出备份",
+      "short_name": "备份",
+      "url": "/?page=backup",
+      "description": "把数据导出到文件夹"
+    }
+  ]
+}

@@ -5,6 +5,7 @@ import { Plants } from './Plants.js';
 import { CompleteQueue } from './CompleteQueue.js';
 import { DataTransfer } from './DataTransfer.js';
 import { AddPlant } from './AddPlant.js';
+import { UpdateBar } from './UpdateBar.js';
 import type { PlantCareService } from '../app/vertical-slice.js';
 
 const PAGES = [
@@ -56,6 +57,8 @@ export function App({ service }: { service: PlantCareService }) {
           </div>
         )}
       </main>
+
+      <UpdateBar />
 
       <nav className="app-nav" aria-label="主导航">
         {PAGES.map((p) => (
