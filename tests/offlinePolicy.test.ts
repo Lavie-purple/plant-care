@@ -120,7 +120,11 @@ describe('缓存清单', () => {
  * 避免「改了策略忘了同步到 service worker」这种静默失效。
  */
 describe('service worker 与策略模块保持一致', () => {
-  const src = readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
+  // 路径必须从项目根算。测试编译后位于 dist/tests/，
+  // 用 import.meta.url 的相对路径会解析成 dist/public/sw.js —— 那个文件不存在。
+  const here = new URL(import.meta.url).pathname.replace(/\\/g, '/');
+  const repoRoot = here.replace(/\/dist\/tests\/.*$/, '/');
+  const src = readFileSync(repoRoot + 'public/sw.js', 'utf8');
 
   test('黑名单主机一致', () => {
     for (const h of NEVER_CACHE_HOSTS) {
