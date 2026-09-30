@@ -12,6 +12,7 @@
 import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import crypto from 'node:crypto';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const out = resolve(here, '..', 'dist-web');
@@ -40,9 +41,23 @@ if (!normalized.startsWith('/') || !normalized.endsWith('/')) {
   process.exit(1);
 }
 
+// 缓存版本由 index.html 的内容哈希生成。
+// 早期把版本写死成 v1，结果改代码后版本没变，浏览器认为 SW 没更新，
+// 旧缓存也不失效 —— 用户会一直跑上一个构建的代码。
+// 实测发现缓存里躺���的 JS 指纹与当前构建对不上。
+// 内容变，版本就变，缓存必然失效。这是唯一可靠的依据。
+const version = crypto.createHash('sha256').update(html).digest('hex').slice(0, 12);
+
 writeFileSync(
   resolve(out, 'sw-config.js'),
-  `// 构建时生成，勿手改。base=${normalized}\nself.__PLANT_BASE__=${JSON.stringify(normalized)};\n`,
+  [
+    '// 构建时生成，勿手改。',
+    `base=${normalized}`,
+    `version=${version}`,
+    `self.__PLANT_BASE__=${JSON.stringify(normalized)};`,
+    `self.__PLANT_VERSION__=${JSON.stringify(version)};`,
+    '',
+  ].join('\n'),
 );
 
 // manifest：start_url / scope / 图标都要带 base。

@@ -10,8 +10,10 @@
  * 缓存天气会在断网时拿旧数据算浇水建议，而用户以为那是现在的。
  */
 
-var CACHE_VERSION = 'v1';
-var CACHE_NAME = 'plant-manager-' + CACHE_VERSION;
+// 缓存版本不再写死。install 时从 sw-config.js 读内容哈希。
+// 写死版本号的后果：改代码后版本不变，浏览器认为 SW 没更新，
+// 旧缓存也不失效，用户会一直跑上一个构建。实测踩过。
+var CACHE_NAME = 'plant-manager-pending';
 
 var NEVER_CACHE_HOSTS = ['api.open-meteo.com', 'geocoding-api.open-meteo.com'];
 var PRECACHE_PREFIX = '/assets/';

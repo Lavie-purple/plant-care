@@ -533,3 +533,17 @@ File System Access API 的选目录在**移动端全部不可用**
 - 没有设定周期 → 不提示
 
 `verdictFor` 与主判定共用同一套口径，否则提示逻辑会和实际行为脱节。
+
+---
+
+## 真机实测发现的离线缓存 bug
+
+T8 测离线时发现：缓存里躺着的 JS 指纹是**上一个构建**的
+（当前是 `index-Dv9bzB-P.js`，缓存里是 `index-CrkuXTXl.js`）。
+
+根因：`public/sw.js` 里 `CACHE_VERSION = 'v1'` 写死。改了代码后版本号没变，
+浏览器认为 service worker 没更新，旧缓存也不失效 —— **用户会一直跑旧代码**，
+而且没有任何报错。
+
+修法：缓存版本由 `index.html` 的内容哈希生成（postbuild 负责写进 sw-config.js，
+SW install 时读取）。内容变，版本就变，缓存必然失效。这是唯一可靠的依据。
