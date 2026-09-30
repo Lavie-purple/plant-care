@@ -10,12 +10,13 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test \"dist/tests/**/*.test.js\"",
-    "test:watch": "npm run build && node --test --watch \"dist/tests/**/*.test.js\"",
-    "verify": "npm run typecheck && npm run test"
+    "test": "node --test --test-concurrency=1 \"dist/tests/**/*.test.js\"",
+    "test:watch": "node --test --watch --test-concurrency=1 \"dist/tests/**/*.test.js\"",
+    "verify": "npm run build && node --test --test-concurrency=1 \"dist/tests/**/*.test.js\" && echo \"VERDICT: ALL GREEN\""
   },
   "devDependencies": {
     "@types/node": "^22.20.4",
+    "fake-indexeddb": "^6.2.5",
     "typescript": "^5.6.0"
   }
 }
