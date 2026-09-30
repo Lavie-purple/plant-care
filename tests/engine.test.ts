@@ -251,15 +251,43 @@ describe('不变量 2：系统绝不改写用户的养护规则（D-13 铁律）
     assert.equal(JSON.stringify(rule), snapshot, 'CareRule 被改写了');
   });
 
-  test('高温下引擎只提出 shouldPrompt，不自行采纳', () => {
+  test('高温让「该浇了」变成「再等等」时才提示', () => {
+    // 第 10 天：设 7-10 已到上限（该浇），高温把窗口推到 8-11（再等等）。
+    // 两边对今天该做什么意见不同，这时问一次才有意义。
     const r = generateRecommendation(
       input({
-        history: [daysAgo(9)],
+        history: [daysAgo(10)],
         weather: weatherOk(makeWeather({ temperature: 38, humidity: 35, rainProbability: 0, windSpeed: 8 })),
       }),
     );
-    assert.equal(r.shouldPromptRuleChange, true, '高温应触发规则变更提示');
+    assert.equal(r.shouldPromptRuleChange, true, '判定被高温改变时应提示');
     assert.ok(r.ruleConflictReason, '必须给出可展示给用户的冲突原因');
+  });
+
+  test('差 1 天不打扰用户', () => {
+    // 回归：实测线上 9 盆全部触发冲突，问的却是同一个问题（7-10 变 8-11）。
+    // 差 1 天是噪音，不是提示。
+    const r = generateRecommendation(
+      input({
+        careRule: makeRule({ recommendedIntervalMin: 7, recommendedIntervalMax: 10 }),
+        history: [daysAgo(9)],
+        weather: weatherOk(makeWeather({ temperature: 31, humidity: 40, rainProbability: 0, windSpeed: 0 })),
+      }),
+    );
+    assert.equal(r.shouldPromptRuleChange, false, '只差 1 天不该打扰');
+  });
+
+  test('差异不改变判定时不提示', () => {
+    // 第 9 天：设的是 7-10（窗口内），算出来 8-11 也是窗口内。
+    // 两边意见一致，不该打扰用户。
+    const r = generateRecommendation(
+      input({
+        careRule: makeRule({ recommendedIntervalMin: 7, recommendedIntervalMax: 10 }),
+        history: [daysAgo(9)],
+        weather: weatherOk(makeWeather({ temperature: 40, humidity: 20, rainProbability: 0, windSpeed: 15 })),
+      }),
+    );
+    assert.equal(r.shouldPromptRuleChange, false, '判定没变就不该问');
   });
 
   test('未触发冲突时 shouldPrompt 为 false', () => {

@@ -121,6 +121,18 @@ function consecutiveRainDays(forecast: { rainProbability: number }[]): number {
   return count;
 }
 
+export /**
+ * 周期落在哪一段。用于判断「差异是否改变判定」。
+ * 抽出来是因为它必须与主判定用同一套口径，否则提示逻辑会和实际行为脱节。
+ */
+function verdictFor(days: number, iv: { min: number; max: number }, relief: number): 'over' | 'window' | 'early' {
+  const adjMax = iv.max + relief;
+  const adjMin = iv.min + relief;
+  if (days >= adjMax) return 'over';
+  if (days >= adjMin) return 'window';
+  return 'early';
+}
+
 export function exposureProfile(exposure: Exposure) {
   return EXPOSURE_PROFILES[exposure];
 }
@@ -329,8 +341,18 @@ export function generateRecommendation(input: EngineInput): EngineOutput {
     min: baseInterval.min + heatPressureDays - rainReliefDays,
     max: baseInterval.max + heatPressureDays - rainReliefDays,
   };
-  const shouldPrompt =
-    baseInterval.origin === 'user' && (computed.min !== baseInterval.min || computed.max !== baseInterval.max);
+  // 什么时候才值得打断用户问一次？
+  //
+  // 早先的判据是「算出来的和设的不一样就问」。实测发现高温时 9 盆全部触发，
+  // 而它们问的是同一个问题（7-10 变成 8-11），纯粹是噪音。
+  //
+  // 真正的门槛应该是：**差异会不会改变今天的判定**。
+  // 如果今天该浇的依然该浇、该等的依然等，那这个差异不值得打扰任何人；
+  // 只有当差异大到足以改变建议时，才值得问一次。
+  const daysNow = daysSince ?? 0;
+  const verdictNow = verdictFor(daysNow, computed, 0); // computed 已含雨量修正，不再重复传
+  const verdictUser = verdictFor(daysNow, baseInterval, 0);
+  const shouldPrompt = baseInterval.origin === 'user' && verdictNow !== verdictUser;
   const ruleConflictReason =
     heatPressureDays > 0
       ? `未来几天高温${profile.tempVariance >= 0.8 ? '且该位置在户外，风与日照都会加速失水' : ''}，蒸腾量上升。`
