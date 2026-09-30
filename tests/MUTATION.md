@@ -415,3 +415,37 @@ File System Access API 的选目录在**移动端全部不可用**
 
 不用 deflate 是刻意取舍：图片本身已压缩，再压几乎不省空间，
 却要付出 CPU 与内存。
+
+---
+
+## 部署配置（第十四批）
+
+校验脚本 `scripts/verify-build.mjs` 本身的断言强度也做了变异检测。
+第一版有三条是假断言，被注入后仍全绿：
+
+| 注入的坏法 | 第一版 | 修正后 |
+|---|---|---|
+| 从不缓存名单里删掉天气接口 | 漏过 | 变红 |
+| manifest 图标路径改回绝对路径 | 变红 | 变红 |
+| 删掉 404.html | **漏过** | 变红 |
+| index.html 资源路径改回根路径 | 变红 | 变红 |
+
+**两条假断言的根因：**
+
+1. `sw.includes('api.open-meteo.com')` —— `api.open-meteo.com` 是
+   `geocoding-api.open-meteo.com` 的**子串**。把天气接口从名单里删掉，
+   地理编码接口还在，`includes` 照样返回 true。
+   改为逐项精确匹配后抓住。
+
+2. `readFileSync(404.html)` —— 文件不存在时直接抛异常中断脚本，
+   退出码非零但看不出是哪一项坏了。**校验脚本自己崩掉比校验失败更难查。**
+   改为先 `existsSync` 判断，把缺失记成一条明确的 FAIL。
+
+### base 路径三处一致
+
+`vite.config.ts`、`scripts/postbuild.mjs`、`scripts/verify-build.mjs`
+必须算出同一个 base。任何一处分歧都会让 SW 缓存路径与实际资源路径错开，
+离线能力静默失效。三处共用 `scripts/base-path.mjs` 的 `resolveBase`。
+
+其中还拦掉一个 Windows 坑：Git Bash 会把命令行里的 `/xxx/`
+转成 `D:/.../xxx/`。`resolveBase` 检测到盘符会直接报错并说明原因。

@@ -12,18 +12,24 @@
 import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadEnv } from 'vite';
+import { pickBase } from './base-path.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const out = resolve(here, '..', 'dist-web');
-// 与 vite.config.ts 用同一套 env 文件，避免两边读到不同的 base
-import { loadEnv } from 'vite';
-const env = loadEnv(process.env.BUILD_MODE || 'production', process.cwd(), '');
-const base = env.BASE_PATH || '/';
 
-// base 必须以 / 开头、以 / 结尾（根路径就是 '/'）
-const normalized = ('/' + base.replace(/^\/+|\/+$/g, '') + '/').replace('//', '/');
+// 与 vite.config.ts 保持同一套读取顺序：环境变量优先，其次 env 文件。
+// 两边读到不同的 base 的话，SW 缓存的路径会和实际资源路径错开，离线直接失效。
+// mode 必须与 vite build 用的完全一致，否则两边读到不同的 .env 文件，
+// base 就会分歧，SW 缓存路径与资源路径错开。
+const mode = process.env.BUILD_MODE || 'production';
+const env = loadEnv(mode, process.cwd(), '');
+const normalized = pickBase({ BASE_PATH: process.env.BASE_PATH || env.BASE_PATH });
 
-writeFileSync(resolve(out, 'sw-config.js'), `// 构建时生成，勿手改。base=${normalized}\nself.__PLANT_BASE__=${JSON.stringify(normalized)};\n`);
+writeFileSync(
+  resolve(out, 'sw-config.js'),
+  `// 构建时生成，勿手改。base=${normalized}\nself.__PLANT_BASE__=${JSON.stringify(normalized)};\n`,
+);
 
 const index = resolve(out, 'index.html');
 if (existsSync(index)) {

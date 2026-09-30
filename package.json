@@ -17,8 +17,9 @@
     "test": "npm run build && npm run test:core && npm run test:ui",
     "build:web": "vite build && node scripts/postbuild.mjs",
     "verify": "npm run typecheck:ui && npm run test && echo \"VERDICT: ALL GREEN\"",
-    "build:pages": "vite build --mode pages && cross-env BUILD_MODE=pages node scripts/postbuild.mjs",
-    "preview": "vite preview --port 4173"
+    "build:pages": "cross-env BUILD_MODE=pages vite build --mode pages && cross-env BUILD_MODE=pages node scripts/postbuild.mjs",
+    "preview": "vite preview --port 4173",
+    "verify:build": "node scripts/verify-build.mjs"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.3",

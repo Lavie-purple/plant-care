@@ -1,0 +1,69 @@
+# 部署到 GitHub Pages
+#
+# 为什么用 Actions 而不是本地构建后推：
+# 仓库名决定部署子路径（/仓库名/），换仓库名就得改配置。
+# 这里用 github.event.repository.name 在运行时拼出来，改名不用动本文件。
+#
+# 首次使用需要在仓库 Settings → Pages → Source 选 "GitHub Actions"。
+
+name: 部署到 GitHub Pages
+
+on:
+  push:
+    branches: [master]
+  # 手动触发，方便改完直接重跑
+  workflow_dispatch:
+
+# Pages 同一时间只允许一个部署在跑，否则会互相覆盖
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+permissions:
+  contents: read # 只读代码
+  pages: write # 写 Pages（部署必需）
+  id-token: write # 换取部署令牌（部署必需）
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 类型检查与测试
+        run: npm run verify
+
+      - name: 构建
+        env:
+          # 项目站点跑在 /<仓库名>/ 下。这一行是 Pages 部署的关键，
+          # 写错会导致整页白屏（资源 404）或 SW 缓存路径错位。
+          BASE_PATH: /${{ github.event.repository.name }}/
+          BUILD_MODE: pages
+        run: npm run build:web
+
+      - name: 校验构建产物
+        run: node scripts/verify-build.mjs
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist-web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
