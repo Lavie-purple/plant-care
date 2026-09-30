@@ -256,7 +256,9 @@ export const GROWTH_TIMELINE_TYPES: readonly PlantEventType[] = [
  * 防止 metadata 退化成无约束的 JSON 袋。
  */
 export const EVENT_REQUIRED_FIELDS: Partial<Record<PlantEventType, readonly (keyof PlantEvent)[]>> = {
-  PHOTO: ['title', 'images'],
+  // PHOTO 只要求有图。标题是可选补充——随手拍一张就该存得下，
+  // 要求同时写标题会让最随手的一件事变成最麻烦的一件事。
+  PHOTO: ['images'],
   NEW_LEAF: ['title'],
   YELLOW_LEAF: ['title'],
   PEST: ['title', 'description'],

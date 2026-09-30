@@ -14,6 +14,7 @@ import type {
   DecisionLog,
   PendingRuleConflict,
   PlantEvent,
+  PlantEventType,
   Plant,
   Settings,
   UserAction,
@@ -276,6 +277,42 @@ export class PlantCareService {
       createdAt: this.clock.now().toISOString(),
       version: 0,
     });
+  }
+
+  /**
+   * 记一条事件。界面的「记一笔」走这里。
+   * 字段按 type 的必填定义收敛，不塞一堆无关字段。
+   */
+  async addEvent(
+    plantId: string,
+    input: {
+      type: PlantEventType;
+      date?: string;
+      title?: string;
+      description?: string;
+      notes?: string;
+      images?: string[];
+    },
+  ): Promise<PlantEvent> {
+    const ev = await this.repo.put<PlantEvent>(STORES.plantEvents, {
+      id: nextId('event'),
+      plantId,
+      type: input.type,
+      date: input.date ?? this.clock.localDate(),
+      ...(input.title !== undefined ? { title: input.title } : {}),
+      ...(input.description !== undefined ? { description: input.description } : {}),
+      // 备注与说明是不同用途：说明是这句话本身，备注写进 metadata
+      images: input.images ?? [],
+      metadata: input.notes !== undefined ? { notes: input.notes } : {},
+      createdAt: this.clock.now().toISOString(),
+      version: 0,
+    });
+    // 没有主图时用第一张照片做封面
+    const plant = await this.repo.getPlant(plantId);
+    if (plant && !plant.coverImageId && ev.images[0]) {
+      await this.repo.put<Plant>(STORES.plants, { ...plant, coverImageId: ev.images[0] });
+    }
+    return ev;
   }
 
   /**

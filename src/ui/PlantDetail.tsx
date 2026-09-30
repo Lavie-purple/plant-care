@@ -5,6 +5,8 @@ import type { WeatherInput } from '../domain/types.js';
 import type { EngineOutput } from '../engine/recommendation.js';
 import { computeStats, formatStat, type Range, type WateringStats } from '../app/stats.js';
 import { describeSource, isNavigable } from './sourceLabel.js';
+import { metaFor } from '../app/eventDraft.js';
+import { EventSheet } from './EventSheet.js';
 import type { PlantCareService } from '../app/vertical-slice.js';
 
 export interface PlantDetailProps {
@@ -38,6 +40,7 @@ export function PlantDetail({ service, plantId, onBack }: PlantDetailProps) {
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sheet, setSheet] = useState<null | { type: 'PHOTO' | 'OTHER' }>(null);
 
   const reload = useCallback(async () => {
     try {
@@ -99,7 +102,22 @@ export function PlantDetail({ service, plantId, onBack }: PlantDetailProps) {
   );
 
   return (
+    <>
     <div className="detail">
+      {sheet && (
+        <EventSheet
+          service={service}
+          plantId={plant.id}
+          plantName={plant.name}
+          {...(sheet.type === 'PHOTO' ? { initialType: 'PHOTO' as const } : {})}
+          onClose={() => setSheet(null)}
+          onSaved={async () => {
+            setSheet(null);
+            setSaved('已记录');
+            await reload();
+          }}
+        />
+      )}
       <header className="detail-top">
         <button className="btn" type="button" onClick={onBack}>← 返回</button>
         <span className="t-title">{plant.name}</span>
@@ -118,6 +136,19 @@ export function PlantDetail({ service, plantId, onBack }: PlantDetailProps) {
           </div>
         </div>
       )}
+
+      <div className="acts2">
+        <button
+          className="btn"
+          type="button"
+          onClick={() => setSheet({ type: 'PHOTO' })}
+        >
+          拍一张
+        </button>
+        <button className="btn" type="button" onClick={() => setSheet({ type: 'OTHER' })}>
+          记一笔
+        </button>
+      </div>
 
       {/* D-06 W 方案：点档即提交 */}
       <section className="quick-water">
@@ -170,6 +201,8 @@ export function PlantDetail({ service, plantId, onBack }: PlantDetailProps) {
           position: sticky; top: 57px; z-index: var(--z-sticky);
           padding: var(--sp-3) var(--sp-4); background: var(--acc-soft); border-bottom: 1px solid var(--ln);
         }
+        .acts2 { display: flex; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--ln); }
+        .acts2 .btn { flex: 1; }
         .quick-water { padding: var(--sp-4); border-bottom: 1px solid var(--ln); }
         .quick-row { display: flex; gap: var(--sp-2); }
         .quick-btn { flex: 1 1 0; min-width: 0; padding: 14px 0; font-size: var(--fs-heading); font-weight: 600; }
@@ -187,6 +220,7 @@ export function PlantDetail({ service, plantId, onBack }: PlantDetailProps) {
         .stat .v { font-size: 20px; font-weight: 600; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
       `}</style>
     </div>
+    </>
   );
 }
 
@@ -263,7 +297,8 @@ function Records({ history, events }: { history: WateringRecord[]; events: Plant
         <div key={e.id} className="kv">
           <span className="k mono">{e.date.slice(5)}</span>
           <span className="v">
-            {e.type}
+            {/* 用中文标签，不把枚举值甩给用户 */}
+            {metaFor(e.type).label}
             {e.title ? `　${e.title}` : ''}
           </span>
         </div>
