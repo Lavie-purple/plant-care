@@ -307,8 +307,10 @@ export function Plants({ service, onOpenPlant, onAddPlant }: PlantsProps) {
            卡片视图每格不窄于 200px（太窄看不清植物状态），
            照片墙每格不窄于 96px（够认出一张照片）。
            这样 5K 屏自然是 7 列，1440 是 5 列，手机是 2 列。 */
-        .p-grid-2 { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
-        .p-grid-4 { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: var(--sp-1); }
+        /* min() 下限让窄屏能退回小卡片。
+           写死 200px 的话，390 宽的手机只排得下 1 列，反而不如两列紧凑。 */
+        .p-grid-2 { grid-template-columns: repeat(auto-fill, minmax(min(160px, 100%), 1fr)); }
+        .p-grid-4 { grid-template-columns: repeat(auto-fill, minmax(min(84px, 100%), 1fr)); gap: var(--sp-1); }
         .pcard { border: 1px solid var(--ln); background: var(--sf); border-radius: var(--r-ctl); overflow: hidden; text-align: left; padding: 0; color: var(--t1); width: 100%; }
         .pcard-due { border: 2px solid var(--t1); }
         .pcard-check { border: 1px dashed var(--ln2); }
