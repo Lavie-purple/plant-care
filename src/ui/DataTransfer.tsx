@@ -209,7 +209,7 @@ export function DataTransfer({ transfer }: DataTransferProps) {
           <div className="t-meta" style={{ marginTop: 6 }}>
             {supportsDirectoryPicker()
               ? '选择一个文件夹，会写入 data.json（植物、记录、事件、决定日志）和 images/ 下的照片。'
-              : '当前浏览器不支持选择目录，将改为下载一个 JSON 文件，照片不会包含在内。'}
+              : '当前浏览器不支持选择目录（手机端都不支持），会打包成一个 ZIP 下载，解压后同样包含 data.json 和 images 文件夹。'}
           </div>
           <button className="btn btn-primary" type="button" disabled={busy} onClick={() => void doExport()}>
             {busy ? '处理中…' : '导出到文件夹'}
@@ -287,10 +287,12 @@ function describeExport(t: {
   declaredImageCount: number;
 }): string {
   if (!t.usedDirectory) {
-    return t.declaredImageCount > 0
-      ? '当前浏览器不支持选择目录，已改为下载 ' + t.fileName + '。注意：' +
-          t.declaredImageCount + ' 张照片不在文件里，需用 Chrome 或 Edge 重新导出才能带上。'
-      : '当前浏览器不支持选择目录，已改为下载 ' + t.fileName + '。';
+    // 移动端全都不支持选目录，走的是 ZIP 打包路径，照片在里面
+    if (t.imageCount < t.declaredImageCount) {
+      return '已打包成 ' + t.fileName + '，但只有 ' + t.imageCount + ' / ' + t.declaredImageCount +
+        ' 张照片进去了。解压后检查 images 文件夹。';
+    }
+    return '已打包成 ' + t.fileName + '，含 ' + t.imageCount + ' 张照片。在电脑上解压即可。';
   }
   if (t.declaredImageCount === 0) {
     return '已导出到 ' + t.fileName + '，暂无照片。';

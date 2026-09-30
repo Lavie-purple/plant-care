@@ -84,6 +84,70 @@ describe('扩展名映射', () => {
   });
 });
 
+describe('Safari 的静默失效：请求 webp 却给 png', () => {
+  // 复现真实行为：canvas.toBlob('image/webp') 在 Safari 上不抛异常，
+  // 只是返回一个 type 为 image/png 的 Blob。早期实现只靠 try/catch，
+  // 所以回退逻辑在 Safari 上从来没生效过。
+  const lyingCodec: ImageCodec = {
+    async decode(b) {
+      return { source: { blob: b }, width: 2000, height: 2000 };
+    },
+    async encode(_s, _w, _h, _mime) {
+      // 无论要什么，都给 PNG
+      return new Blob([new Uint8Array(200)], { type: 'image/png' });
+    },
+  };
+
+  test('WebP 谎报但 JPEG 诚实 → 回退到 JPEG', async () => {
+    // 只对 webp 撒谎的编码器，模拟「部分支持」的浏览器
+    const partial: ImageCodec = {
+      async decode(b) {
+        return { source: { blob: b }, width: 2000, height: 2000 };
+      },
+      async encode(_s, _w, _h, mime) {
+        if (mime === 'image/webp') return new Blob([new Uint8Array(500)], { type: 'image/png' });
+        return new Blob([new Uint8Array(200)], { type: mime });
+      },
+    };
+    const r = await compressImage(blobOf(500 * 1024), partial);
+    assert.equal(r.mimeType, 'image/jpeg', '必须回退到 JPEG，而不是相信谎报');
+    assert.equal(fileNameFor('img-x', r.mimeType), 'img-x.jpg', '落盘扩展名必须与实际内容一致');
+  });
+
+  test('两种格式都谎报 → 保留原图，不存下类型不符的假货', async () => {
+    const r = await compressImage(blobOf(500 * 1024), lyingCodec);
+    assert.equal(r.compressed, false);
+    assert.equal(r.blob.size, 500 * 1024, '原图必须完整保留');
+    assert.match(r.warning ?? '', /压缩失败/);
+  });
+
+  test('正常返回正确类型时不做多余回退', async () => {
+    const honest: ImageCodec = {
+      async decode(b) {
+        return { source: { blob: b }, width: 2000, height: 2000 };
+      },
+      async encode(_s, _w, _h, mime) {
+        return new Blob([new Uint8Array(200)], { type: mime });
+      },
+    };
+    const r = await compressImage(blobOf(500 * 1024), honest);
+    assert.equal(r.mimeType, 'image/webp', '支持时应当用 WebP');
+  });
+
+  test('大小写不同的 mime 视为一致', async () => {
+    const upper: ImageCodec = {
+      async decode(b) {
+        return { source: { blob: b }, width: 2000, height: 2000 };
+      },
+      async encode(_s, _w, _h, mime) {
+        return new Blob([new Uint8Array(200)], { type: mime.toUpperCase() });
+      },
+    };
+    const r = await compressImage(blobOf(500 * 1024), upper);
+    assert.equal(r.compressed, true, 'IMAGE/WEBP 与 image/webp 是同一种，不该误判为不支持');
+  });
+});
+
 describe('内容哈希：同内容只存一份', () => {
   test('同内容同哈希', async () => {
     const a = await hashBlob(blobOf(100, 'image/jpeg'));

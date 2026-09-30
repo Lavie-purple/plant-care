@@ -15,7 +15,42 @@ var CACHE_NAME = 'plant-manager-' + CACHE_VERSION;
 
 var NEVER_CACHE_HOSTS = ['api.open-meteo.com', 'geocoding-api.open-meteo.com'];
 var PRECACHE_PREFIX = '/assets/';
-var SHELL_ASSETS = ['/', '/manifest.webmanifest', '/icon.svg', '/icon-maskable.svg'];
+
+/**
+ * 部署基路径。install 时从 sw-config.js 读，读不到就用 '/'。
+ *
+ * 为什么要这样：同一份 sw.js 要同时能跑在根路径（Cloudflare Pages / Vercel）
+ * 和子路径（GitHub Pages 的 /<仓库名>/）下。写死 '/' 的话，
+ * 部署到 Pages 时外壳资源全部 404，离线能力静默失效。
+ */
+var BASE = '/';
+
+function resolveShell(name) {
+  if (name === '/') return BASE;
+  return BASE.slice(0, -1) + name;
+}
+
+function shellList() {
+  return ['/', '/manifest.webmanifest', '/icon.svg', '/icon-maskable.svg'].map(resolveShell);
+}
+
+var SHELL_ASSETS = shellList();
+
+function loadBase() {
+  return fetch('sw-config.js', { cache: 'no-store' })
+    .then(function (r) {
+      return r.ok ? r.json() : {};
+    })
+    .catch(function () {
+      return {};
+    })
+    .then(function (cfg) {
+      if (cfg && typeof cfg.base === 'string' && cfg.base) {
+        BASE = cfg.base.charAt(cfg.base.length - 1) === '/' ? cfg.base : cfg.base + '/';
+        SHELL_ASSETS = shellList();
+      }
+    });
+}
 
 var ABSOLUTE = /^https?:/i;
 
@@ -46,8 +81,11 @@ function decide(request) {
 
 self.addEventListener('install', function (event) {
   event.waitUntil(
-    caches
-      .open(CACHE_NAME)
+    // 先读部署基路径再缓存，否则子路径部署时外壳资源会全部 404
+    loadBase()
+      .then(function () {
+        return caches.open(CACHE_NAME);
+      })
       // 逐个添加而不是 addAll：某一个 404 不该让整个安装失败
       .then(function (cache) {
         return Promise.all(
@@ -117,7 +155,7 @@ self.addEventListener('fetch', function (event) {
   if (strategy === 'shell-fallback') {
     event.respondWith(
       fetch(request).catch(function () {
-        return caches.match('/');
+        return caches.match(BASE);
       }),
     );
     return;

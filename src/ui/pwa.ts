@@ -30,8 +30,13 @@ export function registerServiceWorker(onUpdate?: Handler): () => void {
 
   let waitingWorker: ServiceWorker | null = null;
 
+  // SW 路径必须跟着 Vite 的 base 走。GitHub Pages 项目站点跑在
+  // /<仓库名>/ 下，写死 '/sw.js' 会注册失败，离线能力直接失效。
+  const base = import.meta.env.BASE_URL || '/';
+  const swUrl = base + 'sw.js';
+
   navigator.serviceWorker
-    .register('/sw.js', { scope: '/' })
+    .register(swUrl, { scope: base })
     .then((reg) => {
       if (reg.waiting && navigator.serviceWorker.controller) {
         waitingWorker = reg.waiting;
