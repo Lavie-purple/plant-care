@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Today } from './Today.js';
 import { PlantDetail } from './PlantDetail.js';
+import { Plants } from './Plants.js';
 import type { PlantCareService } from '../app/vertical-slice.js';
 
 const PAGES = [
@@ -24,9 +25,13 @@ export function App({ service }: { service: PlantCareService }) {
           <PlantDetail service={service} plantId={detailId} onBack={() => setDetailId(null)} />
         )}
         {!detailId && page === 'today' && <Today service={service} onOpenPlant={(id) => setDetailId(id)} />}
-        {page !== 'today' && (
+        {!detailId && page === 'plants' && <Plants service={service} onOpenPlant={(id) => setDetailId(id)} />}
+        {!detailId && page !== 'today' && page !== 'plants' && (
           <div style={{ padding: 24 }}>
-            <div className="t-secondary">{PAGES.find((p) => p.key === page)?.label} 页面尚未实现</div>
+            <div className="t-title">{PAGES.find((p) => p.key === page)?.label}</div>
+            <div className="t-secondary" style={{ marginTop: 8 }}>
+              这一页还没做。当前已完成：今日养护、我的植物、植物详情。
+            </div>
           </div>
         )}
       </main>
