@@ -303,14 +303,19 @@ export function Plants({ service, onOpenPlant, onAddPlant }: PlantsProps) {
         .p-bulk { display: flex; align-items: center; justify-content: space-between; padding: 0 var(--sp-4) var(--sp-2); }
         .p-check { display: flex; align-items: center; gap: 6px; }
         .p-grid { display: grid; gap: var(--sp-3); padding: 0 var(--sp-4) var(--sp-4); }
-        .p-grid-2 { grid-template-columns: 1fr 1fr; }
-        .p-grid-4 { grid-template-columns: repeat(4, 1fr); gap: var(--sp-1); }
+        /* 列数按容器实际宽度自动算，不写死断点。
+           卡片视图每格不窄于 200px（太窄看不清植物状态），
+           照片墙每格不窄于 96px（够认出一张照片）。
+           这样 5K 屏自然是 7 列，1440 是 5 列，手机是 2 列。 */
+        .p-grid-2 { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+        .p-grid-4 { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: var(--sp-1); }
         .pcard { border: 1px solid var(--ln); background: var(--sf); border-radius: var(--r-ctl); overflow: hidden; text-align: left; padding: 0; color: var(--t1); width: 100%; }
         .pcard-due { border: 2px solid var(--t1); }
         .pcard-check { border: 1px dashed var(--ln2); }
         .pcard-rest { opacity: 0.5; }
-        .pcard .ph { height: 96px; background: var(--s2); border-bottom: 1px solid var(--ln); display: flex; align-items: center; justify-content: center; font-size: 9px; color: var(--t3); }
-        .p-grid-4 .pcard .ph { height: 62px; }
+        .pcard .ph { aspect-ratio: 4 / 3; background: var(--s2); border-bottom: 1px solid var(--ln); display: flex; align-items: center; justify-content: center; font-size: 9px; color: var(--t3); }
+        /* 照片墙用正方形比例。写死像素高度会在宽屏下把格子拉变形。 */
+        .p-grid-4 .pcard .ph { aspect-ratio: 1 / 1; }
         .pcard .body { padding: 7px 8px 9px; }
         .p-grid-4 .pcard .body { padding: 4px; }
         .p-table-wrap { overflow-x: auto; padding: 0 var(--sp-4) var(--sp-4); }

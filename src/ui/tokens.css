@@ -196,11 +196,37 @@ button {
   max-width: 720px;
 }
 
+/*
+  平板（768-1023）：中间这一段原本是空的。
+  竖屏平板 768 用 720 的限宽没问题，但横屏 1024 起内容区可以更宽，
+  否则一行字横跨 1024px，行长会超过 90 字符，读起来吃力。
+*/
+@media (min-width: 768px) {
+  .app-main {
+    max-width: 760px;
+  }
+  /* 平板横屏下给导航一点内边距，不贴着屏幕边 */
+  .app-nav {
+    padding-left: var(--sp-2);
+    padding-right: var(--sp-2);
+  }
+}
+
 @media (min-width: 1024px) {
   .app-main {
     max-width: 860px;
   }
-  /* 导航与内容同宽并居中，不加边框，避免和主内容区视觉断裂 */
+}
+
+/*
+  超宽屏（5K 约 2560 CSS px 及以上）：
+  正文继续放宽会牺牲可读性，所以维持 860，
+  靠植物墙的 auto-fill 自动加列来利用横向空间，而不是拉长文字。
+*/
+@media (min-width: 1920px) {
+  .app-main {
+    max-width: 920px;
+  }
 }
 
 
