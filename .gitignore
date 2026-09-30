@@ -70,11 +70,11 @@ blob-report/
 *.sqlite
 *.sqlite3
 *.db
-data/
-local-data/
-export/
-exports/
-backups/
+/data/
+/local-data/
+/export/
+/exports/
+/backups/
 *.zip
 !fixtures/*.zip
 fixtures/user-data/
