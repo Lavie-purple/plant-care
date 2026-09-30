@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { DataTransferService, describeImportPreview, type ImageIntegrity } from '../data/DataTransferService.js';
 import { describeProblem, type ImportMode, type ImportValidation } from '../data/exportBundle.js';
 import { supportsDirectoryPicker } from '../data/exportFiles.js';
+import { resetLocalData } from '../data/reset.js';
 import type { ImageRecord } from '../domain/types.js';
 
 export interface DataTransferProps {
@@ -49,6 +50,20 @@ export function DataTransfer({ transfer }: DataTransferProps) {
       setStage('preview');
     } catch (e) {
       if (isAbort(e)) return;
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function doReset() {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await resetLocalData(null, { deleteDatabase: false });
+      setMessage(r.note);
+      setStage('done');
+    } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
@@ -224,6 +239,17 @@ export function DataTransfer({ transfer }: DataTransferProps) {
           </div>
           <button className="btn" type="button" disabled={busy} onClick={() => void doRead()}>
             选择备份文件夹
+          </button>
+        </div>
+
+        <div className="dt-card">
+          <div className="t-h">重置本地数据</div>
+          <div className="t-meta" style={{ marginTop: 6 }}>
+            清空这台设备上的全部植物数据。离线缓存与图标会保留。
+            删除后无法撤销。
+          </div>
+          <button className="btn" type="button" style={{ marginTop: 12 }} disabled={busy} onClick={() => void doReset()}>
+            清空所有数据
           </button>
         </div>
 

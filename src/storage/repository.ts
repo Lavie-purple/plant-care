@@ -151,6 +151,12 @@ export class Repository {
   private onBroadcast(raw: unknown): void {
     const msg = raw as ChangeMessage;
     if (!msg || typeof msg !== 'object') return;
+
+    // 别的标签页要删库，先放开连接让它删成功（D-19）
+    if ((msg as { kind?: string }).kind === 'close-db-for-delete') {
+      this.close();
+      return;
+    }
     if (msg.kind === 'hello') {
       // 对方刚加入，回一个 ping 让它知道我们还在
       this.broadcast({ kind: 'ping' });
