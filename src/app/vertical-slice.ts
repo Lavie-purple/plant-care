@@ -441,6 +441,16 @@ export class PlantCareService {
     return mode;
   }
 
+  /** 仓储实例。界面层在示例数据等少数场景需要直接写库 */
+  get repository(): Repository {
+    return this.repo;
+  }
+
+  /** 全部决定日志，习惯页用 */
+  async allDecisions(): Promise<DecisionLog[]> {
+    return this.repo.allDecisionLogs();
+  }
+
   /** 单株植物，可能已删除 */
   async getPlant(plantId: string): Promise<Plant | undefined> {
     return this.repo.getPlant(plantId);

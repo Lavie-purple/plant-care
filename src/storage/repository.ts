@@ -373,6 +373,11 @@ export class Repository {
     return all.find((i) => i.hash === hash);
   }
 
+  /** 全部决定日志 */
+  async allDecisionLogs(): Promise<DecisionLog[]> {
+    return this.getAll<DecisionLog>(STORES.decisionLogs);
+  }
+
   async decisionsFor(plantId: EntityId): Promise<DecisionLog[]> {
     return this.byIndex<DecisionLog>(STORES.decisionLogs, 'by_plant', plantId);
   }

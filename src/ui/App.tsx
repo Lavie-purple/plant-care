@@ -5,6 +5,7 @@ import { Plants } from './Plants.js';
 import { CompleteQueue } from './CompleteQueue.js';
 import { DataTransfer } from './DataTransfer.js';
 import { AddPlant } from './AddPlant.js';
+import { Insight } from './Insight.js';
 import { UpdateBar } from './UpdateBar.js';
 import type { PlantCareService } from '../app/vertical-slice.js';
 
@@ -48,12 +49,13 @@ export function App({ service }: { service: PlantCareService }) {
         {!inQueue && !inBackup && !detailId && page === 'backup' && (
           <DataTransfer transfer={service.dataTransfer()} />
         )}
-        {!inQueue && !inBackup && !detailId && page !== 'today' && page !== 'plants' && page !== 'backup' && (
+        {!inQueue && !inBackup && !detailId && !adding && (page === 'judge' || page === 'habits') && (
+          <Insight service={service} repo={service.repository} page={page} />
+        )}
+        {!inQueue && !inBackup && !detailId && !adding && page !== 'today' && page !== 'plants' && page !== 'backup' && page !== 'judge' && page !== 'habits' && (
           <div style={{ padding: 24 }}>
             <div className="t-title">{PAGES.find((p) => p.key === page)?.label}</div>
-            <div className="t-secondary" style={{ marginTop: 8 }}>
-              这一页还没做。当前已完成：今日养护、我的植物、植物详情、导出导入。
-            </div>
+            <div className="t-secondary" style={{ marginTop: 8 }}>这一页还没做。</div>
           </div>
         )}
       </main>
