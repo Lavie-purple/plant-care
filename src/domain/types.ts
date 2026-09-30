@@ -163,6 +163,8 @@ export interface PendingRuleConflict {
   resolvedAt?: ISODateTime;
   /** keep | take-computed */
   resolution?: 'keep-user' | 'take-computed';
+  /** 乐观锁（D-17）。建 schema 时漏了，此处补上 */
+  version: number;
 }
 
 // ============================================================

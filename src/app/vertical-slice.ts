@@ -22,6 +22,7 @@ import type {
 import { generateRecommendation, type EngineOutput } from '../engine/recommendation.js';
 import { Repository } from '../storage/repository.js';
 import { buildQueue, completeRecord, DEFAULT_PENDING_DAYS, type QueueItem } from './completionQueue.js';
+import { DataTransferService } from '../data/DataTransferService.js';
 import { STORES } from '../storage/indexeddb.js';
 import { toWeatherInput, type WeatherProvider } from '../weather/provider.js';
 import type { WeatherInput } from '../domain/types.js';
@@ -249,6 +250,11 @@ export class PlantCareService {
   /** 把超期的待补全记录降级为「历史空白」。启动时调一次。 */
   async sweepStalePending(): Promise<number> {
     return this.repo.expireStalePending(DEFAULT_PENDING_DAYS, this.clock.now());
+  }
+
+  /** 数据搬运服务（导出/导入）。仓库实例由这里持有，界面层不接触。 */
+  dataTransfer(): DataTransferService {
+    return new DataTransferService(this.repo, { now: () => this.clock.now() });
   }
 
   /** 单株植物，可能已删除 */

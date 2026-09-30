@@ -3,6 +3,7 @@ import { Today } from './Today.js';
 import { PlantDetail } from './PlantDetail.js';
 import { Plants } from './Plants.js';
 import { CompleteQueue } from './CompleteQueue.js';
+import { DataTransfer } from './DataTransfer.js';
 import type { PlantCareService } from '../app/vertical-slice.js';
 
 const PAGES = [
@@ -10,6 +11,7 @@ const PAGES = [
   { key: 'judge', label: '判定' },
   { key: 'plants', label: '植物' },
   { key: 'habits', label: '习惯' },
+  { key: 'backup', label: '备份' },
 ] as const;
 
 type PageKey = (typeof PAGES)[number]['key'];
@@ -19,23 +21,32 @@ export function App({ service }: { service: PlantCareService }) {
   // 详情页是 Today 页的下钻，不占用主导航位
   const [detailId, setDetailId] = useState<string | null>(null);
   const [inQueue, setInQueue] = useState(false);
+  const [inBackup, setInBackup] = useState(false);
 
   return (
     <div className="app">
       <main className="app-main">
-        {inQueue && <CompleteQueue service={service} onDone={() => { setInQueue(false); }} />}
-        {!inQueue && detailId && (
+        {inBackup && (
+          <DataTransfer transfer={service.dataTransfer()} />
+        )}
+        {!inBackup && inQueue && <CompleteQueue service={service} onDone={() => { setInQueue(false); }} />}
+        {!inQueue && !inBackup && detailId && (
           <PlantDetail service={service} plantId={detailId} onBack={() => setDetailId(null)} />
         )}
-        {!inQueue && !detailId && page === 'today' && (
+        {!inQueue && !inBackup && !detailId && page === 'today' && (
           <Today service={service} onOpenPlant={(id) => setDetailId(id)} onOpenQueue={() => setInQueue(true)} />
         )}
-        {!detailId && page === 'plants' && <Plants service={service} onOpenPlant={(id) => setDetailId(id)} />}
-        {!detailId && page !== 'today' && page !== 'plants' && (
+        {!inQueue && !inBackup && !detailId && page === 'plants' && (
+          <Plants service={service} onOpenPlant={(id) => setDetailId(id)} />
+        )}
+        {!inQueue && !inBackup && !detailId && page === 'backup' && (
+          <DataTransfer transfer={service.dataTransfer()} />
+        )}
+        {!inQueue && !inBackup && !detailId && page !== 'today' && page !== 'plants' && page !== 'backup' && (
           <div style={{ padding: 24 }}>
             <div className="t-title">{PAGES.find((p) => p.key === page)?.label}</div>
             <div className="t-secondary" style={{ marginTop: 8 }}>
-              这一页还没做。当前已完成：今日养护、我的植物、植物详情。
+              这一页还没做。当前已完成：今日养护、我的植物、植物详情、导出导入。
             </div>
           </div>
         )}
