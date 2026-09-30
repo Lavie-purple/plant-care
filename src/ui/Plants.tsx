@@ -19,6 +19,7 @@ import type { PlantCareService } from '../app/vertical-slice.js';
 export interface PlantsProps {
   service: PlantCareService;
   onOpenPlant: (plantId: string) => void;
+  onAddPlant: () => void;
 }
 
 type View = 'card' | 'wall' | 'list';
@@ -39,7 +40,7 @@ const ACTION_SHORT: Record<Action, string> = {
   NO_ACTION: '—',
 };
 
-export function Plants({ service, onOpenPlant }: PlantsProps) {
+export function Plants({ service, onOpenPlant, onAddPlant }: PlantsProps) {
   const [items, setItems] = useState<FilterablePlant[]>([]);
   const [weather, setWeather] = useState<WeatherInput | null>(null);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
@@ -122,7 +123,7 @@ export function Plants({ service, onOpenPlant }: PlantsProps) {
           </span>
           {/* 全局唯一的新建入口。放在顶栏而不是内容流末尾，
               否则列表模式下它会挤在表格和筛选之间，位置很怪。 */}
-          <button className="btn btn-primary" type="button">＋ 添加</button>
+          <button className="btn btn-primary" type="button" onClick={onAddPlant}>＋ 添加</button>
         </div>
       </header>
 
@@ -274,7 +275,7 @@ export function Plants({ service, onOpenPlant }: PlantsProps) {
       {filtered.length === 0 && (
         <div className="p-empty">
           <div className="t-secondary">
-            {items.length === 0 ? '还没有植物。点「＋ 添加」建第一盆。' : '没有符合筛选条件的植物。'}
+            {items.length === 0 ? '还没有植物。点右上角「＋ 添加」建第一盆。' : '没有符合筛选条件的植物。'}
           </div>
         </div>
       )}

@@ -76,21 +76,45 @@ export class Repository {
     if (this.db) return;
     this.db = await new Promise<IDBDatabase>((resolve, reject) => {
       const req = this.factory.open(getDatabaseName(), DB_VERSION);
+      // 早先没有这三个守卫：建表阶段一旦出错，onsuccess 和 onerror
+      // 都不会触发，open() 永远挂起，界面上表现为一片黑屏且没有任何提示。
+      // 现在三路都有出口：成功、明确报错、启动阶段报错、超时兜底。
+      let settled = false;
+      const fail = (msg: string, cause?: unknown) => {
+        if (settled) return;
+        settled = true;
+        reject(new Error('打开本地数据库失败：' + msg + (cause !== undefined ? '（' + String(cause) + '）' : '')));
+      };
+      const timer = setTimeout(() => fail('超时（10 秒），可能被另一个标签页占用或存储被禁用'), 10_000);
+
       req.onupgradeneeded = () => {
-        const db = req.result;
-        for (const [name, def] of Object.entries(SCHEMA)) {
-          const store = db.objectStoreNames.contains(name)
-            ? req.transaction!.objectStore(name)
-            : db.createObjectStore(name, { keyPath: def.keyPath });
-          for (const idx of def.indexes) {
-            if (!store.indexNames.contains(idx.name)) {
-              store.createIndex(idx.name, idx.keyPath, { unique: idx.unique ?? false });
+        try {
+          const db = req.result;
+          for (const [name, def] of Object.entries(SCHEMA)) {
+            const store = db.objectStoreNames.contains(name)
+              ? (req.transaction as IDBTransaction).objectStore(name)
+              : db.createObjectStore(name, { keyPath: def.keyPath });
+            for (const idx of def.indexes) {
+              if (!store.indexNames.contains(idx.name)) {
+                store.createIndex(idx.name, idx.keyPath, { unique: idx.unique ?? false });
+              }
             }
           }
+        } catch (e) {
+          fail('建表阶段出错：' + (e instanceof Error ? e.message : String(e)), e);
         }
       };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error ?? new Error('打开 IndexedDB 失败'));
+      req.onsuccess = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(req.result);
+      };
+      req.onerror = () => {
+        clearTimeout(timer);
+        fail(req.error?.message ?? '未知错误', req.error);
+      };
+      req.onblocked = () => fail('被其他标签页阻塞，请关掉其他打开本应用的标签页后重试');
     });
 
     this.channel = this.channelFactory(BROADCAST_CHANNEL);

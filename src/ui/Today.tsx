@@ -11,6 +11,8 @@ export interface TodayProps {
   onOpenPlant?: (plantId: string) => void;
   /** 打开补录队列 */
   onOpenQueue?: () => void;
+  /** 打开添加植物 */
+  onAddPlant?: () => void;
 }
 
 /**
@@ -19,7 +21,7 @@ export interface TodayProps {
  * 布局与视觉按 drafts/wireframe-today-2.html 的 L 方案，
  * 配色按 D-12 夜色暗色优先。
  */
-export function Today({ service, onOpenPlant, onOpenQueue }: TodayProps) {
+export function Today({ service, onOpenPlant, onOpenQueue, onAddPlant }: TodayProps) {
   const [plants, setPlants] = useState<Plant[]>([]);
   const [entries, setEntries] = useState<{ plant: Plant; recommendation: EngineOutput['recommendation']; daysSince: number | undefined }[]>([]);
   const [weather, setWeather] = useState<WeatherInput | null>(null);
@@ -196,8 +198,18 @@ export function Today({ service, onOpenPlant, onOpenQueue }: TodayProps) {
       ))}
 
       {board.batches.length === 0 && (
-        <div style={{ padding: 'var(--sp-5) var(--sp-4)' }}>
-          <div className="t-secondary">还没有植物。先添加一盆，系统才能给出建议。</div>
+        <div className="empty">
+          <div className="t-heading">还没有植物</div>
+          <div className="t-secondary" style={{ marginTop: 8 }}>
+            {plants.length === 0
+              ? '先添加一盆。之后每记一次浇水，系统就能结合天气告诉你今天该处理哪几盆。'
+              : '当前筛选条件下没有植物。'}
+          </div>
+          {plants.length === 0 && (
+            <button className="btn btn-primary" type="button" style={{ marginTop: 18 }} onClick={() => onAddPlant?.()}>
+              添加第一盆
+            </button>
+          )}
         </div>
       )}
 

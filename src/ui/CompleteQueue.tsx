@@ -188,7 +188,7 @@ export function CompleteQueue({ service, onDone }: CompleteQueueProps) {
         .cq-label { margin: var(--sp-5) 0 var(--sp-2); font-size: var(--fs-label); color: var(--t2); }
         .cq-row { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
         .cq-row .btn { flex: 1 1 0; min-width: 64px; }
-        .cq-actions { position: sticky; bottom: 0; display: flex; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); background: var(--sf); border-top: 1px solid var(--ln); }
+        .cq-actions { position: sticky; bottom: var(--nav-h); z-index: 1; display: flex; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); background: var(--sf); border-top: 1px solid var(--ln); }
       `}</style>
     </div>
   );

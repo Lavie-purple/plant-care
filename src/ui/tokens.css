@@ -190,6 +190,8 @@ button {
 
 .app-main {
   width: 100%;
+  /* 让子元素的 100% 高度有参照，避免 sticky 底栏链断裂 */
+  min-height: 0;
   margin: 0 auto;
   max-width: 720px;
 }
@@ -200,3 +202,25 @@ button {
   }
   /* 导航与内容同宽并居中，不加边框，避免和主内容区视觉断裂 */
 }
+
+
+/* ============================================================
+   表单
+   ============================================================ */
+
+.ap-input {
+  width: 100%;
+  border: 1px solid var(--ln2);
+  border-radius: var(--r-ctl);
+  background: var(--sf);
+  color: var(--t1);
+  padding: 8px 10px;
+  font-size: var(--fs-label);
+  font-family: inherit;
+}
+.ap-input::placeholder { color: var(--t3); }
+.ap-input:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+
+
+/* 主导航高度。所有 sticky 底栏都要避开它，否则会被压住 */
+:root { --nav-h: 45px; }

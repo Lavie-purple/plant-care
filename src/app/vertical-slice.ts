@@ -257,6 +257,48 @@ export class PlantCareService {
     return new DataTransferService(this.repo, { now: () => this.clock.now() });
   }
 
+  /**
+   * 记一条纯文字事件。来源、备注这类只写一次的信息走这里，
+   * 而不是在 Plant 上加个只用过一次的字段。
+   */
+  async addNote(plantId: string, text: string): Promise<PlantEvent> {
+    return this.repo.put<PlantEvent>(STORES.plantEvents, {
+      id: nextId('event'),
+      plantId,
+      type: 'NOTE',
+      date: this.clock.localDate(),
+      description: text,
+      images: [],
+      metadata: {},
+      createdAt: this.clock.now().toISOString(),
+      version: 0,
+    });
+  }
+
+  /**
+   * 把一张已存好的图片挂到植物上。
+   * 同时建一条 PHOTO 事件，这样它会出现在成长时间线里（D-08）。
+   */
+  async attachPhoto(plantId: string, imageId: string, title?: string): Promise<PlantEvent> {
+    const plant = await this.repo.getPlant(plantId);
+    const event = await this.repo.put<PlantEvent>(STORES.plantEvents, {
+      id: nextId('event'),
+      plantId,
+      type: 'PHOTO',
+      date: this.clock.localDate(),
+      ...(title !== undefined ? { title } : {}),
+      images: [imageId],
+      metadata: {},
+      createdAt: this.clock.now().toISOString(),
+      version: 0,
+    });
+    // 没有主图时把第一张设为封面
+    if (plant && !plant.coverImageId) {
+      await this.repo.put<Plant>(STORES.plants, { ...plant, coverImageId: imageId });
+    }
+    return event;
+  }
+
   /** 单株植物，可能已删除 */
   async getPlant(plantId: string): Promise<Plant | undefined> {
     return this.repo.getPlant(plantId);

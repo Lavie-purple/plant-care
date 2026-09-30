@@ -4,6 +4,7 @@ import { PlantDetail } from './PlantDetail.js';
 import { Plants } from './Plants.js';
 import { CompleteQueue } from './CompleteQueue.js';
 import { DataTransfer } from './DataTransfer.js';
+import { AddPlant } from './AddPlant.js';
 import type { PlantCareService } from '../app/vertical-slice.js';
 
 const PAGES = [
@@ -22,6 +23,7 @@ export function App({ service }: { service: PlantCareService }) {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [inQueue, setInQueue] = useState(false);
   const [inBackup, setInBackup] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   return (
     <div className="app">
@@ -29,15 +31,18 @@ export function App({ service }: { service: PlantCareService }) {
         {inBackup && (
           <DataTransfer transfer={service.dataTransfer()} />
         )}
-        {!inBackup && inQueue && <CompleteQueue service={service} onDone={() => { setInQueue(false); }} />}
-        {!inQueue && !inBackup && detailId && (
+        {adding && (
+          <AddPlant service={service} onCancel={() => setAdding(false)} onDone={() => setAdding(false)} />
+        )}
+        {!adding && !inBackup && inQueue && <CompleteQueue service={service} onDone={() => { setInQueue(false); }} />}
+        {!adding && !inQueue && !inBackup && detailId && (
           <PlantDetail service={service} plantId={detailId} onBack={() => setDetailId(null)} />
         )}
-        {!inQueue && !inBackup && !detailId && page === 'today' && (
-          <Today service={service} onOpenPlant={(id) => setDetailId(id)} onOpenQueue={() => setInQueue(true)} />
+        {!adding && !inQueue && !inBackup && !detailId && page === 'today' && (
+          <Today service={service} onOpenPlant={(id) => setDetailId(id)} onOpenQueue={() => setInQueue(true)} onAddPlant={() => setAdding(true)} />
         )}
         {!inQueue && !inBackup && !detailId && page === 'plants' && (
-          <Plants service={service} onOpenPlant={(id) => setDetailId(id)} />
+          <Plants service={service} onOpenPlant={(id) => setDetailId(id)} onAddPlant={() => setAdding(true)} />
         )}
         {!inQueue && !inBackup && !detailId && page === 'backup' && (
           <DataTransfer transfer={service.dataTransfer()} />
