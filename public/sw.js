@@ -38,25 +38,35 @@ function shellList() {
 
 var SHELL_ASSETS = shellList();
 
-function loadBase() {
+/**
+ * 读构建期注入的配置（base 与缓存版本）。
+ *
+ * 踩过三次坑，全部记在这里：
+ *   1. 用 fetch + r.json() 解析 —— 但 sw-config.js 是 JS 赋值语句不是 JSON，
+ *      解析失败被 catch 吞成 {}，版本号永远读不到
+ *   2. 改用 <script> 标签加载 —— 但 service worker 环境没有 document，
+ *      这个标签根本不存在
+ *   3. 现在的做法：用 fetch 拿文本，正则抠出自赋值语句
+ *
+ * 第三种能work的原因很朴素：文件是我们自己生成的，格式是可控的。
+ */
+function loadConfig() {
   return fetch('sw-config.js', { cache: 'no-store' })
     .then(function (r) {
-      return r.ok ? r.json() : {};
+      return r.ok ? r.text() : '';
     })
     .catch(function () {
-      return {};
+      return '';
     })
-    .then(function (cfg) {
-      if (cfg && typeof cfg.base === 'string' && cfg.base) {
-        BASE = cfg.base.charAt(cfg.base.length - 1) === '/' ? cfg.base : cfg.base + '/';
+    .then(function (text) {
+      if (!text) return;
+      var m = text.match(/__PLANT_BASE__\s*=\s*"([^"]*)"/);
+      if (m && m[1]) {
+        BASE = m[1].charAt(m[1].length - 1) === '/' ? m[1] : m[1] + '/';
         SHELL_ASSETS = shellList();
       }
-      // 版本变了就换一个缓存名，旧缓存在 activate 时被清掉。
-      // 这是修「用户一直跑上一个构建」的关键：写死版本号时，
-      // 浏览器认为 SW 没更新，旧缓存也不失效。
-      if (cfg && typeof cfg.__PLANT_VERSION__ === 'string' && cfg.__PLANT_VERSION__) {
-        CACHE_NAME = 'plant-manager-' + cfg.__PLANT_VERSION__;
-      }
+      var v = text.match(/__PLANT_VERSION__\s*=\s*"([^"]*)"/);
+      if (v && v[1]) CACHE_NAME = 'plant-manager-' + v[1];
     });
 }
 
@@ -90,7 +100,7 @@ function decide(request) {
 self.addEventListener('install', function (event) {
   event.waitUntil(
     // 先读部署基路径再缓存，否则子路径部署时外壳资源会全部 404
-    loadBase()
+    loadConfig()
       .then(function () {
         return caches.open(CACHE_NAME);
       })

@@ -30,31 +30,54 @@ const SETTINGS: Settings = {
 };
 
 /** 2026-09-30 真实接口响应的结构样本，字段名与单位均已核对 */
-function realResponseFixture() {
+/**
+ * 真实接口响应的结构样本，字段名与单位均已核对。
+ *
+ * 预报时刻**相对于当下生成**而不是写死。
+ * 写死日期的测试必然会腐烂：日期一变，已过时刻全被过滤，测试就挂了。
+ */
+/** 接口的 current.time 是不带时区的本地时间，如 2026-09-30T16:00 */
+function localTimeOf(d: Date) {
+  return (
+    d.getFullYear() +
+    '-' + String(d.getMonth() + 1).padStart(2, '0') +
+    '-' + String(d.getDate()).padStart(2, '0') +
+    'T' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')
+  );
+}
+
+function realResponseFixture(now: Date = new Date()) {
+  const iso = (offsetHours: number) =>
+    new Date(now.getTime() + offsetHours * 3_600_000).toISOString().slice(0, 16);
+  const localHour = (offsetHours: number) => {
+    const d = new Date(now.getTime() + offsetHours * 3_600_000);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + 'T' + String(d.getHours()).padStart(2, '0') + ':00';
+  };
   return {
     latitude: 23.093145,
     longitude: 113.253136,
-    utc_offset_seconds: 28800,
+    utc_offset_seconds: -new Date().getTimezoneOffset() * 60,
     current: {
-      time: '2026-09-30T16:00',
+      time: localHour(0),
       temperature_2m: 35.6,
       relative_humidity_2m: 48,
       precipitation: 0.3,
-      wind_speed_10m: 8.9, // km/h
+      wind_speed_10m: 8.9,
       weather_code: 95,
     },
     hourly: {
-      time: ['2026-09-30T15:00', '2026-09-30T16:00', '2026-10-01T00:00'],
+      time: [localHour(0), localHour(1), localHour(2)],
       temperature_2m: [35.0, 35.6, 28.0],
       relative_humidity_2m: [50, 48, 80],
       precipitation_probability: [10, 20, 75],
       precipitation: [0, 0.3, 5],
     },
     daily: {
-      time: ['2026-09-30'],
-      sunshine_duration: [32400], // 秒 = 9 小时
+      time: [localHour(0).slice(0, 10)],
+      sunshine_duration: [32400],
       precipitation_probability_max: [30],
     },
+    _iso: iso,
   };
 }
 
@@ -121,13 +144,21 @@ describe('观测时刻 vs 抓取时刻：不是同一件事', () => {
   // 回归测试：timestamp 曾记为「我请求的时刻」，导致界面上「来源」显示的时间
   // 与用户实际看到的天气数据对不上。
   test('timestamp 是接口给的观测时刻，不是抓取时刻', async () => {
-    const p = new OpenMeteoProvider(stubFetch(realResponseFixture()));
+    // 让接口的观测时刻比抓取时刻早 2 小时，两者必须可区分
+    const now = new Date();
+    const fixture = realResponseFixture(now);
+    fixture.current.time = localTimeOf(new Date(now.getTime() - 2 * 3_600_000));
+
+    const p = new OpenMeteoProvider(stubFetch(fixture));
     const snap = await p.fetch(SETTINGS);
-    // fixture 里 current.time = 2026-09-30T16:00 本地时间，utc_offset = 28800 (UTC+8)
-    const observed = new Date(snap.timestamp);
-    // 换算到 UTC+8 应该是 16:00
-    const localHour = observed.getUTCHours() + 8;
-    assert.equal(localHour, 16, );
+
+    const observed = new Date(snap.timestamp).getTime();
+    const fetched = Date.now();
+    const driftMin = Math.round((fetched - observed) / 60_000);
+    assert.ok(
+      Math.abs(driftMin - 120) < 5,
+      `观测时刻应比抓取时刻早约 120 分钟，实际差 ${driftMin} 分钟`,
+    );
   });
 
   test('同一次观测的重复抓取是同一条数据，id 相同并覆盖而非堆积', async () => {
