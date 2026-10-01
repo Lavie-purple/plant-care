@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { EXPOSURE_DESC, EXPOSURE_LABEL } from '../domain/types.js';
+import { EXPOSURE_DESC, EXPOSURE_LABEL, PLACEMENTS } from '../domain/types.js';
 import type { CareRule, DecisionLog, Plant, PlantEvent, WateringMethod, WateringRecord } from '../domain/types.js';
 import type { WeatherInput } from '../domain/types.js';
 import type { EngineOutput } from '../engine/recommendation.js';
@@ -40,6 +40,7 @@ export function PlantDetail({ service, plantId, onBack }: PlantDetailProps) {
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<null | 'edit' | 'delete'>(null);
   const [sheet, setSheet] = useState<null | { type: 'PHOTO' | 'OTHER' }>(null);
 
   const reload = useCallback(async () => {
@@ -121,7 +122,10 @@ export function PlantDetail({ service, plantId, onBack }: PlantDetailProps) {
       <header className="detail-top">
         <button className="btn" type="button" onClick={onBack}>← 返回</button>
         <span className="t-title">{plant.name}</span>
-        <button className="btn" type="button">编辑</button>
+        <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
+          <button className="btn" type="button" onClick={() => setMode('edit')}>编辑</button>
+          <button className="btn" type="button" onClick={() => setMode('delete')}>删除</button>
+        </div>
       </header>
 
       {/* T 方案：状态条常驻，滚到哪都在 */}
@@ -183,12 +187,34 @@ export function PlantDetail({ service, plantId, onBack }: PlantDetailProps) {
         ))}
       </nav>
 
-      {tab === 'overview' && (
+      {mode === 'edit' && (
+        <EditPanel
+          plant={plant}
+          onCancel={() => setMode(null)}
+          onSave={async (patch) => {
+            await service.updatePlant(plant.id, patch as never);
+            setMode(null);
+            await reload();
+          }}
+        />
+      )}
+      {mode === 'delete' && (
+        <DeletePanel
+          plant={plant}
+          counts={{ watering: history.length, events: events.length, decisions: decisions.length }}
+          onCancel={() => setMode(null)}
+          onConfirm={async () => {
+            await service.deletePlant(plant.id);
+            onBack();
+          }}
+        />
+      )}
+      {mode === null && tab === 'overview' && (
         <Overview plant={plant} rule={rule} rec={rec} weather={weather} history={history} />
       )}
-      {tab === 'records' && <Records history={history} events={events} />}
-      {tab === 'photos' && <Photos timeline={timeline} />}
-      {tab === 'stats' && <Stats stats={stats} range={range} onRange={setRange} />}
+      {mode === null && tab === 'records' && <Records history={history} events={events} />}
+      {mode === null && tab === 'photos' && <Photos timeline={timeline} />}
+      {mode === null && tab === 'stats' && <Stats stats={stats} range={range} onRange={setRange} />}
 
       <style>{`
         .detail { display: flex; flex-direction: column; }
@@ -395,6 +421,169 @@ function Stats({
         </div>
       )}
       <div className="t-meta" style={{ marginTop: 8 }}>口径：{stats.basis}</div>
+    </div>
+  );
+}
+
+/**
+ * 编辑植物档案。
+ *
+ * 只提交改动的字段，不传的保持原样 —— 免得打开编辑把没填的清空。
+ */
+function EditPanel({
+  plant,
+  onSave,
+  onCancel,
+}: {
+  plant: Plant;
+  onSave: (patch: Record<string, unknown>) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [form, setForm] = useState({
+    name: plant.name,
+    species: plant.species ?? '',
+    family: plant.family ?? '',
+    placement: plant.placement,
+    exposure: plant.exposure,
+    potDiameterCm: plant.potDiameterCm ? String(plant.potDiameterCm) : '',
+    notes: plant.notes ?? '',
+  });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function save() {
+    if (!form.name.trim()) {
+      setErr('名字不能为空');
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    try {
+      await onSave({
+        name: form.name.trim(),
+        ...(form.species.trim() ? { species: form.species.trim() } : {}),
+        ...(form.family.trim() ? { family: form.family.trim() } : {}),
+        placement: form.placement,
+        exposure: form.exposure,
+        ...(form.potDiameterCm.trim() ? { potDiameterCm: Number(form.potDiameterCm) } : {}),
+        ...(form.notes.trim() ? { notes: form.notes.trim() } : {}),
+      });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="panel">
+      <div className="t-heading" style={{ marginBottom: 12 }}>编辑档案</div>
+      <div className="ap-grid">
+        <Field2 label="名字" required>
+          <input className="ap-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        </Field2>
+        <Field2 label="品种">
+          <input className="ap-input" value={form.species} onChange={(e) => setForm({ ...form, species: e.target.value })} />
+        </Field2>
+        <Field2 label="科">
+          <input className="ap-input" value={form.family} onChange={(e) => setForm({ ...form, family: e.target.value })} />
+        </Field2>
+        <Field2 label="盆口径" unit="cm">
+          <input className="ap-input num" value={form.potDiameterCm}
+            onChange={(e) => setForm({ ...form, potDiameterCm: e.target.value })} />
+        </Field2>
+        <Field2 label="位置">
+          <select className="ap-input" value={form.placement} onChange={(e) => setForm({ ...form, placement: e.target.value as Plant['placement'] })}>
+            {PLACEMENTS.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </Field2>
+        <Field2 label="暴露度">
+          <select className="ap-input" value={form.exposure} onChange={(e) => setForm({ ...form, exposure: e.target.value as Plant['exposure'] })}>
+            <option value="indoor">室内</option>
+            <option value="indoor_window">室内靠窗</option>
+            <option value="semi_outdoor">半户外</option>
+            <option value="outdoor">露天</option>
+          </select>
+        </Field2>
+        <Field2 label="备注">
+          <input className="ap-input" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+        </Field2>
+      </div>
+      {err && <div className="t-meta" style={{ color: 'var(--acc)', marginTop: 8 }} role="alert">{err}</div>}
+      <div style={{ display: 'flex', gap: 'var(--sp-2)', marginTop: 16 }}>
+        <button className="btn" type="button" style={{ flex: 1 }} onClick={onCancel} disabled={busy}>取消</button>
+        <button className="btn btn-primary" type="button" style={{ flex: 1 }} onClick={() => void save()} disabled={busy}>
+          {busy ? '保存中…' : '保存'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 删除确认。
+ * 必须说清会连带删掉什么，否则用户不敢点，也容易误点。
+ */
+function DeletePanel({
+  plant,
+  counts,
+  onConfirm,
+  onCancel,
+}: {
+  plant: Plant;
+  counts: { watering: number; events: number; decisions: number };
+  onConfirm: () => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [confirmText, setConfirmText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const ready = confirmText.trim() === plant.name;
+
+  return (
+    <div className="panel">
+      <div className="t-heading" style={{ marginBottom: 8 }}>删除这盆植物</div>
+      <div className="t-secondary">
+        「{plant.name}」的以下数据会一起被删除，且无法撤销：
+      </div>
+      <ul style={{ padding: '8px 0 8px 18px', margin: 0 }}>
+        <li className="t-s">{counts.watering} 条浇水记录</li>
+        <li className="t-s">{counts.events} 条事件与照片引用</li>
+        <li className="t-s">{counts.decisions} 条决定日志</li>
+        <li className="t-s">它的养护规则</li>
+      </ul>
+      <div className="t-s" style={{ marginTop: 8 }}>
+        输入 <b style={{ color: 'var(--t1)' }}>{plant.name}</b> 以确认：
+      </div>
+      <input className="ap-input" style={{ marginTop: 6 }} value={confirmText}
+        onChange={(e) => setConfirmText(e.target.value)} aria-label="输入植物名以确认删除" />
+      {err && <div className="t-meta" style={{ color: 'var(--acc)', marginTop: 8 }} role="alert">{err}</div>}
+      <div style={{ display: 'flex', gap: 'var(--sp-2)', marginTop: 16 }}>
+        <button className="btn" type="button" style={{ flex: 1 }} onClick={onCancel} disabled={busy}>取消</button>
+        <button className="btn" type="button" style={{ flex: 1 }} disabled={!ready || busy}
+          onClick={() => {
+            setBusy(true);
+            setErr(null);
+            void onConfirm().catch((e) => {
+              setErr(e instanceof Error ? e.message : String(e));
+              setBusy(false);
+            });
+          }}>
+          {busy ? '删除中…' : '确认删除'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Field2({ label, children, unit, required }: { label: string; children: React.ReactNode; unit?: string; required?: boolean }) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <label className="t-label" style={{ display: 'block', marginBottom: 5, color: 'var(--t2)' }}>
+        {label}
+        {required ? <span style={{ color: 'var(--t3)' }}>　必填</span> : null}
+        {unit ? <span className="t-meta" style={{ marginLeft: 6 }}>单位 {unit}</span> : null}
+      </label>
+      {children}
     </div>
   );
 }

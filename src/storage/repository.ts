@@ -379,6 +379,37 @@ export class Repository {
     return all.find((i) => i.hash === hash);
   }
 
+  /**
+   * 删植物并连带清掉它的所有记录。
+   *
+   * 留着孤儿记录会让统计里出现查不到主人的数据，
+   * 界面上和数据库损坏表现一样，极难排查。
+   */
+  async deletePlantCascade(plantId: EntityId): Promise<void> {
+    const db = this.db;
+    if (!db) throw new Error('Repository 未打开');
+    const names = ['plants', 'careRules', 'wateringRecords', 'plantEvents', 'recommendations', 'pendingConflicts', 'decisionLogs'];
+    await new Promise<void>((resolve, reject) => {
+      const t = db.transaction(names, 'readwrite');
+      for (const n of names) {
+        const store = t.objectStore(n);
+        const req = store.openCursor();
+        req.onsuccess = () => {
+          const cur = req.result;
+          if (cur) {
+            if (cur.value.plantId === plantId) cur.delete();
+            cur.continue();
+          }
+        };
+      }
+      // plants 是按主键存���，没有 plantId 字段，单独删
+      t.objectStore('plants').delete(plantId);
+      t.oncomplete = () => resolve();
+      t.onerror = () => reject(t.error ?? new Error('删除失败'));
+      t.onabort = () => reject(t.error ?? new Error('删除被中止'));
+    });
+  }
+
   /** 全部决定日志 */
   async allDecisionLogs(): Promise<DecisionLog[]> {
     return this.getAll<DecisionLog>(STORES.decisionLogs);

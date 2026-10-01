@@ -446,6 +446,34 @@ export class PlantCareService {
     return this.repo;
   }
 
+  /**
+   * 改植物档案。
+   *
+   * 只改传入的字段，未传的保持原样 —— 免得打开编辑就把没填的字段清空。
+   * 走乐观锁：别人（另一个标签页）同时改过则拒绝覆盖。
+   */
+  async updatePlant(
+    plantId: string,
+    patch: Partial<Pick<Plant, 'name' | 'species' | 'family' | 'placement' | 'exposure' | 'potDiameterCm' | 'lightProfile' | 'notes'>>,
+  ): Promise<Plant> {
+    const cur = await this.repo.getPlant(plantId);
+    if (!cur) throw new Error('植物不存在');
+    const next: Plant = { ...cur, ...patch, updatedAt: this.clock.now().toISOString() };
+    // 带 version 做乐观锁：期望值用当前读到的 version，
+    // 若期间被其他标签页改过，put 会抛 OptimisticLockError
+    return this.repo.put<Plant>(STORES.plants, next, cur.version);
+  }
+
+  /**
+   * 删植物，连带它的记录、规则、事件、决定。
+   *
+   * 为什么连带删而不是留孤儿：留着会让统计里出现查不到主人的记录，
+   * 界面表现和数据库损坏一模一样，很难排查。
+   */
+  async deletePlant(plantId: string): Promise<void> {
+    await this.repo.deletePlantCascade(plantId);
+  }
+
   /** 全部决定日志，习惯页用 */
   async allDecisions(): Promise<DecisionLog[]> {
     return this.repo.allDecisionLogs();
