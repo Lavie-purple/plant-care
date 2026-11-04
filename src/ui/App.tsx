@@ -26,6 +26,12 @@ export function App({ service }: { service: PlantCareService }) {
   const [inQueue, setInQueue] = useState(false);
   const [inBackup, setInBackup] = useState(false);
   const [adding, setAdding] = useState(false);
+  // 数据版本号：任何可能改数据的界面关闭时递增，
+  // 通知还挂载着的页面（植物页在添加表单下面时）重取。
+  // 之前添加表单关掉后没人通知植物页，列表停在旧数据——
+  // 用户以为没加上，会再添一遍，产生重复植物（实测踩过）。
+  const [dataVersion, setDataVersion] = useState(0);
+  const bumpVersion = () => setDataVersion((v) => v + 1);
 
   return (
     <div className="app">
@@ -34,17 +40,17 @@ export function App({ service }: { service: PlantCareService }) {
           <DataTransfer transfer={service.dataTransfer()} />
         )}
         {adding && (
-          <AddPlant service={service} onCancel={() => setAdding(false)} onDone={() => setAdding(false)} />
+          <AddPlant service={service} onCancel={() => setAdding(false)} onDone={() => { setAdding(false); bumpVersion(); }} />
         )}
-        {!adding && !inBackup && inQueue && <CompleteQueue service={service} onDone={() => { setInQueue(false); }} />}
+        {!adding && !inBackup && inQueue && <CompleteQueue service={service} onDone={() => { setInQueue(false); bumpVersion(); }} />}
         {!adding && !inQueue && !inBackup && detailId && (
-          <PlantDetail service={service} plantId={detailId} onBack={() => setDetailId(null)} />
+          <PlantDetail service={service} plantId={detailId} onBack={() => { setDetailId(null); bumpVersion(); }} />
         )}
         {!adding && !inQueue && !inBackup && !detailId && page === 'today' && (
           <Today service={service} onOpenPlant={(id) => setDetailId(id)} onOpenQueue={() => setInQueue(true)} onAddPlant={() => setAdding(true)} />
         )}
         {!inQueue && !inBackup && !detailId && page === 'plants' && (
-          <Plants service={service} onOpenPlant={(id) => setDetailId(id)} onAddPlant={() => setAdding(true)} />
+          <Plants service={service} onOpenPlant={(id) => setDetailId(id)} onAddPlant={() => setAdding(true)} refreshKey={dataVersion} />
         )}
         {!inQueue && !inBackup && !detailId && page === 'backup' && (
           <DataTransfer transfer={service.dataTransfer()} />

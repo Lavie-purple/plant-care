@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { EXPOSURE_LABEL, type Action, type Plant } from '../domain/types.js';
+import { EXPOSURE_LABEL, PLACEMENTS, type Action, type Plant } from '../domain/types.js';
 import type { WeatherInput } from '../domain/types.js';
 import type { EngineOutput } from '../engine/recommendation.js';
 import {
@@ -20,6 +20,9 @@ export interface PlantsProps {
   service: PlantCareService;
   onOpenPlant: (plantId: string) => void;
   onAddPlant: () => void;
+  /** 父层在数据可能变化时递增（添加完成、详情返回等），本页据此重取列表。
+   *  不传则只在挂载时取一次。 */
+  refreshKey?: number;
 }
 
 type View = 'card' | 'wall' | 'list';
@@ -40,7 +43,7 @@ const ACTION_SHORT: Record<Action, string> = {
   NO_ACTION: '—',
 };
 
-export function Plants({ service, onOpenPlant, onAddPlant }: PlantsProps) {
+export function Plants({ service, onOpenPlant, onAddPlant, refreshKey = 0 }: PlantsProps) {
   const [items, setItems] = useState<FilterablePlant[]>([]);
   const [weather, setWeather] = useState<WeatherInput | null>(null);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
@@ -48,37 +51,61 @@ export function Plants({ service, onOpenPlant, onAddPlant }: PlantsProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showMore, setShowMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [batch, setBatch] = useState<'delete' | 'move' | null>(null);
 
   const load = useCallback(async () => {
+    // 两个阶段，故意不把天气放在植物前面：
+    // 之前先等 loadWeather()，天气请求挂住（网络差时重试最长约 20 秒）
+    // 会把整个列表卡在初始空态——界面上显示「还没有植物」，数据其实都在。
+    // 现在植物列表先渲染（判定列先显示 —），天气回来后再补判定。
+    setError(null);
+    let plants: Plant[];
+    const base: FilterablePlant[] = [];
     try {
-      setError(null);
-      const w = await service.loadWeather();
-      setWeather(w);
-      const plants = await service.listPlants();
-      const out: FilterablePlant[] = [];
+      plants = await service.listPlants();
       for (const plant of plants) {
         const history = await service.wateringHistory(plant.id);
         const rule = await service.careRule(plant.id);
-        const rec: EngineOutput = await service.recommend(plant.id, w);
-        out.push({
+        base.push({
           plant,
-          action: rec.recommendation.action,
-          daysSince: rec.daysSince,
+          action: undefined,
+          daysSince: undefined,
           hasCareRule: Boolean(rule),
           maxInterval: rule?.recommendedIntervalMax,
           wateringCount: history.filter((x) => x.completionState === 'complete').length,
           pendingCount: history.filter((x) => x.completionState === 'pending').length,
         });
       }
-      setItems(out);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      return;
+    }
+    setItems(base);
+    // 阶段二：天气与判定。天气失败不报错（loadWeather 自带降级），
+    // 也不清空已渲染的列表。
+    try {
+      const w = await service.loadWeather();
+      setWeather(w);
+      const out: FilterablePlant[] = [];
+      for (const plant of plants) {
+        const rec: EngineOutput = await service.recommend(plant.id, w);
+        const prev = base.find((x) => x.plant.id === plant.id);
+        out.push({
+          ...(prev ?? { plant, hasCareRule: false, maxInterval: undefined, wateringCount: 0, pendingCount: 0 }),
+          action: rec.recommendation.action,
+          daysSince: rec.daysSince,
+        });
+      }
+      setItems(out);
+    } catch (e) {
+      // 判定拿不到时保留列表本体，只是没有建议列。
+      console.warn('判定刷新失败', e);
     }
   }, [service]);
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshKey]);
 
   const filtered = useMemo(() => {
     const r = applyFilters(items, filters);
@@ -205,7 +232,12 @@ export function Plants({ service, onOpenPlant, onAddPlant }: PlantsProps) {
             <span className="t-label">全选当前 {filtered.length} 盆</span>
           </label>
           {selected.size > 0 && (
-            <span className="t-meta">已选 {selected.size} 盆</span>
+            <div className="p-bulk-actions" role="toolbar" aria-label="批量操作">
+              <span className="t-meta">已选 {selected.size} 盆</span>
+              <button className="btn" type="button" onClick={() => setBatch('move')}>改位置</button>
+              <button className="btn" type="button" onClick={() => setBatch('delete')}>删除所选</button>
+              <button className="btn" type="button" onClick={() => setSelected(new Set())}>取消选择</button>
+            </div>
           )}
         </div>
       )}
@@ -280,6 +312,30 @@ export function Plants({ service, onOpenPlant, onAddPlant }: PlantsProps) {
         </div>
       )}
 
+      {batch === 'delete' && selected.size > 0 && (
+        <BatchDeletePanel
+          service={service}
+          plants={items.filter((x) => selected.has(x.plant.id)).map((x) => x.plant)}
+          onDone={async () => {
+            setBatch(null);
+            setSelected(new Set());
+            await load();
+          }}
+        />
+      )}
+      {batch === 'move' && selected.size > 0 && (
+        <BatchMovePanel
+          service={service}
+          plants={items.filter((x) => selected.has(x.plant.id)).map((x) => x.plant)}
+          onDone={async () => {
+            setBatch(null);
+            setSelected(new Set());
+            await load();
+          }}
+          onCancel={() => setBatch(null)}
+        />
+      )}
+
       {showMore && (
         <MoreFilters
           f={filters}
@@ -301,6 +357,8 @@ export function Plants({ service, onOpenPlant, onAddPlant }: PlantsProps) {
         .p-views button:last-child { border-right: none; }
         .pv-on { background: var(--acc) !important; color: var(--acc-fg) !important; font-weight: 600; }
         .p-bulk { display: flex; align-items: center; justify-content: space-between; padding: 0 var(--sp-4) var(--sp-2); }
+        .p-bulk-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .p-bulk-actions .btn { padding: 4px 10px; font-size: var(--fs-meta); }
         .p-check { display: flex; align-items: center; gap: 6px; }
         .p-grid { display: grid; gap: var(--sp-3); padding: 0 var(--sp-4) var(--sp-4); }
         /* 列数按容器实际宽度自动算，不写死断点。
@@ -477,6 +535,226 @@ function MoreFilters({
           <button type="button" className="btn btn-primary" style={{ flex: 1 }} onClick={onClose}>
             完成
           </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/**
+ * 批量删除：逐盆确认，不提供「一键全删」。
+ * 单盆删除用「输入名字」当闸门；批量要是省掉它，一次滑手
+ * 就比误删一盆贵得多。每删完一盆立即落库，中途反悔的代价只有没删的那些。
+ */
+function BatchDeletePanel({
+  service,
+  plants,
+  onDone,
+}: {
+  service: PlantCareService;
+  plants: Plant[];
+  /** 所有出口都走这里：面板结束时父层刷新列表并清空选择 */
+  onDone: () => Promise<void> | void;
+}) {
+  const [queue, setQueue] = useState<Plant[]>(plants);
+  const [counts, setCounts] = useState<{ watering: number; events: number; decisions: number } | null>(null);
+  const [confirmText, setConfirmText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const current = queue[0];
+  const doneCount = plants.length - queue.length;
+
+  useEffect(() => {
+    setCounts(null);
+    setConfirmText('');
+    setErr(null);
+    if (!current) return;
+    let alive = true;
+    void (async () => {
+      try {
+        const [history, events, decisions] = await Promise.all([
+          service.wateringHistory(current.id),
+          service.events(current.id),
+          service.decisions(current.id),
+        ]);
+        if (alive) setCounts({ watering: history.length, events: events.length, decisions: decisions.length });
+      } catch (e) {
+        if (alive) setErr(e instanceof Error ? e.message : String(e));
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [current, service]);
+
+  function finish() {
+    void onDone();
+  }
+
+  /** 确认删除当前盆，或跳过它。两者都推进队列；队列空了面板结束 */
+  async function advance(deleteIt: boolean) {
+    if (!current) return;
+    if (deleteIt) {
+      setBusy(true);
+      setErr(null);
+      try {
+        await service.deletePlant(current.id);
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e));
+        setBusy(false);
+        return;
+      }
+      setBusy(false);
+    }
+    const rest = queue.slice(1);
+    setQueue(rest);
+    if (rest.length === 0) finish();
+  }
+
+  if (!current) return null;
+
+  return (
+    <>
+      <div className="sheet-mask" onClick={finish} role="presentation" />
+      <div className="sheet" role="dialog" aria-label="批量删除">
+        <h3>
+          批量删除（第 {doneCount + 1} / {plants.length} 盆）
+        </h3>
+        <div className="t-secondary">
+          「{current.name}」的以下数据会一起被删除，且无法撤销：
+        </div>
+        <ul style={{ padding: '8px 0 8px 18px', margin: 0 }}>
+          <li className="t-s">{counts ? `${counts.watering} 条浇水记录` : '…'}</li>
+          <li className="t-s">{counts ? `${counts.events} 条事件与照片引用` : '…'}</li>
+          <li className="t-s">{counts ? `${counts.decisions} 条决定日志` : '…'}</li>
+          <li className="t-s">它的养护规则</li>
+        </ul>
+        <div className="t-s" style={{ marginTop: 8 }}>
+          输入 <b style={{ color: 'var(--t1)' }}>{current.name}</b> 以确认删除这一盆：
+        </div>
+        <input
+          className="ap-input"
+          style={{ marginTop: 6 }}
+          value={confirmText}
+          onChange={(e) => setConfirmText(e.target.value)}
+          aria-label="输入植物名以确认删除"
+        />
+        {err && (
+          <div className="t-meta" style={{ color: 'var(--acc)', marginTop: 8 }} role="alert">
+            {err}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 'var(--sp-2)', marginTop: 16, flexWrap: 'wrap' }}>
+          <button className="btn" type="button" onClick={finish}>
+            结束（还剩 {queue.length - 1} 盆不删）
+          </button>
+          <button className="btn" type="button" disabled={busy} onClick={() => void advance(false)}>
+            跳过这盆
+          </button>
+          <button
+            className="btn"
+            type="button"
+            disabled={confirmText.trim() !== current.name || busy}
+            onClick={() => void advance(true)}
+          >
+            {busy ? '删除中…' : '确认删除这一盆'}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/**
+ * 批量改位置。改位置不是破坏性操作，不用逐盆确认；
+ * 但乐观锁冲突只该影响个别盆——逐盆记结果，最后给汇总。
+ */
+function BatchMovePanel({
+  service,
+  plants,
+  onDone,
+  onCancel,
+}: {
+  service: PlantCareService;
+  plants: Plant[];
+  onDone: () => Promise<void> | void;
+  onCancel: () => void;
+}) {
+  const [placement, setPlacement] = useState<Plant['placement']>(plants[0]?.placement ?? '客厅');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [result, setResult] = useState<{ ok: number; failures: Array<{ name: string; reason: string }> } | null>(null);
+
+  async function apply() {
+    setBusy(true);
+    setErr(null);
+    let ok = 0;
+    const failures: Array<{ name: string; reason: string }> = [];
+    for (const p of plants) {
+      try {
+        await service.updatePlant(p.id, { placement });
+        ok += 1;
+      } catch (e) {
+        // 失败原因必须可诊断，不能吞成「失败 N 盆」
+        failures.push({ name: p.name, reason: e instanceof Error ? e.message : String(e) });
+      }
+    }
+    setBusy(false);
+    setResult({ ok, failures });
+  }
+
+  return (
+    <>
+      <div className="sheet-mask" onClick={onCancel} role="presentation" />
+      <div className="sheet" role="dialog" aria-label="批量改位置">
+        <h3>批量改位置（{plants.length} 盆）</h3>
+        <div className="t-secondary">
+          把这 {plants.length} 盆移到同一个位置：
+          {plants.map((p) => p.name).join('、')}
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <label className="t-label" style={{ display: 'block', marginBottom: 5, color: 'var(--t2)' }}>
+            新位置
+          </label>
+          <select
+            className="ap-input"
+            value={placement}
+            onChange={(e) => setPlacement(e.target.value as Plant['placement'])}
+            aria-label="新位置"
+          >
+            {PLACEMENTS.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+        </div>
+        {result && (
+          <div className="t-label" style={{ marginTop: 12 }} role="status">
+            已移动 {result.ok} 盆
+            {result.failures.length > 0 ? `，${result.failures.length} 盆失败：${result.failures.map((f) => `${f.name}（${f.reason}）`).join('；')}` : ''}。
+          </div>
+        )}
+        {err && (
+          <div className="t-meta" style={{ color: 'var(--acc)', marginTop: 8 }} role="alert">
+            {err}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 'var(--sp-2)', marginTop: 16 }}>
+          {result ? (
+            <button className="btn btn-primary" type="button" style={{ flex: 1 }} onClick={() => void onDone()}>
+              完成
+            </button>
+          ) : (
+            <>
+              <button className="btn" type="button" style={{ flex: 1 }} onClick={onCancel} disabled={busy}>
+                取消
+              </button>
+              <button className="btn btn-primary" type="button" style={{ flex: 1 }} disabled={busy} onClick={() => void apply()}>
+                {busy ? '移动中…' : '应用'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </>

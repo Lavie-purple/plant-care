@@ -273,3 +273,173 @@ describe('D-06 补录队列：待补全可被筛出', () => {
     });
   });
 });
+
+describe('批量工具条：选中后要有真动作', () => {
+  test('勾选后出现删除/改位置/取消选择三个动作', async () => {
+    const { svc } = await setup();
+    await seed(svc);
+    renderPlants(svc);
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('tab', { name: '列表' }));
+    await user.click(await screen.findByLabelText('选择 龟背竹 A'));
+
+    const toolbar = await screen.findByRole('toolbar', { name: '批量操作' });
+    expect(within(toolbar).getByRole('button', { name: '删除所选' })).toBeTruthy();
+    expect(within(toolbar).getByRole('button', { name: '改位置' })).toBeTruthy();
+    expect(within(toolbar).getByRole('button', { name: '取消选择' })).toBeTruthy();
+  });
+
+  test('取消选择清空计数且动作消失', async () => {
+    const { svc } = await setup();
+    await seed(svc);
+    renderPlants(svc);
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('tab', { name: '列表' }));
+    await user.click(await screen.findByLabelText('选择 龟背竹 A'));
+    await user.click(screen.getByRole('button', { name: '取消选择' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText(/已选/)).toBeNull();
+      expect(screen.queryByRole('toolbar')).toBeNull();
+    });
+  });
+
+  test('批量删除逐盆确认：错名不解锁，对名删第一盆后进到第二盆', async () => {
+    const { svc, repo } = await setup();
+    const { b, c } = await seed(svc); // 薄荷、白掌
+    renderPlants(svc);
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('tab', { name: '列表' }));
+    await user.click(await screen.findByLabelText('选择 薄荷'));
+    await user.click(await screen.findByLabelText('选择 白掌'));
+    await user.click(screen.getByRole('button', { name: '删除所选' }));
+
+    const dialog = screen.getByRole('dialog', { name: '批量删除' });
+    // 第一盆是谁由排序决定，从面板文字里取，不猜顺序
+    const text = dialog.textContent ?? '';
+    const m = text.match(/「(.+?)」的以下数据/);
+    expect(m).toBeTruthy();
+    const first = m![1];
+    const input = within(dialog).getByLabelText('输入植物名以确认删除') as HTMLInputElement;
+    const confirm = within(dialog).getByRole('button', { name: '确认删除这一盆' }) as HTMLButtonElement;
+
+    // 错名不解锁
+    await user.type(input, first.slice(0, -1));
+    expect(confirm.disabled).toBe(true);
+
+    // 对名删第一盆，立即落库
+    await user.clear(input);
+    await user.type(input, first);
+    expect(confirm.disabled).toBe(false);
+    await user.click(confirm);
+
+    await waitFor(() => {
+      const remaining = screen.getByRole('dialog', { name: '批量删除' }).textContent ?? '';
+      expect(remaining).toContain('第 2 / 2 盆');
+    });
+    const gone = await svc.getPlant(first === '薄荷' ? b.id : c.id);
+    expect(gone).toBeUndefined();
+
+    // 第二盆同样逐盆确认
+    const dialog2 = screen.getByRole('dialog', { name: '批量删除' });
+    const text2 = dialog2.textContent ?? '';
+    const second = text2.match(/「(.+?)」的以下数据/)![1];
+    const input2 = within(dialog2).getByLabelText('输入植物名以确认删除') as HTMLInputElement;
+    await user.type(input2, second);
+    await user.click(within(dialog2).getByRole('button', { name: '确认删除这一盆' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: '批量删除' })).toBeNull();
+    });
+    expect(await svc.getPlant(first === '薄荷' ? c.id : b.id)).toBeUndefined();
+    expect(await svc.listPlants()).toHaveLength(1);
+  });
+
+  test('批量删除可以跳过某盆', async () => {
+    const { svc } = await setup();
+    const { a, b } = await seed(svc);
+    renderPlants(svc);
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('tab', { name: '列表' }));
+    await user.click(await screen.findByLabelText('选择 龟背竹 A'));
+    await user.click(await screen.findByLabelText('选择 薄荷'));
+    await user.click(screen.getByRole('button', { name: '删除所选' }));
+
+    // 跳过第一盆（不管它是谁）
+    const dialog = screen.getByRole('dialog', { name: '批量删除' });
+    const first = (dialog.textContent ?? '').match(/「(.+?)」的以下数据/)![1];
+    await user.click(within(dialog).getByRole('button', { name: '跳过这盆' }));
+
+    // 第二盆确认删除
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: '批量删除' }).textContent).toContain('第 2 / 2 盆');
+    });
+    const dialog2 = screen.getByRole('dialog', { name: '批量删除' });
+    const second = (dialog2.textContent ?? '').match(/「(.+?)」的以下数据/)![1];
+    await user.type(within(dialog2).getByLabelText('输入植物名以确认删除'), second);
+    await user.click(within(dialog2).getByRole('button', { name: '确认删除这一盆' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: '批量删除' })).toBeNull();
+    });
+    // 跳过的活着，确认的死掉
+    const skipped = first === '龟背竹 A' ? a : b;
+    const deleted = first === '龟背竹 A' ? b : a;
+    expect(await svc.getPlant(skipped.id)).toBeTruthy();
+    expect(await svc.getPlant(deleted.id)).toBeUndefined();
+  });
+
+  test('批量改位置：应用后全部更新并给汇总', async () => {
+    const { svc } = await setup();
+    const { a, b } = await seed(svc);
+    renderPlants(svc);
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('tab', { name: '列表' }));
+    await user.click(await screen.findByLabelText('选择 龟背竹 A'));
+    await user.click(await screen.findByLabelText('选择 薄荷'));
+    await user.click(screen.getByRole('button', { name: '改位置' }));
+
+    const dialog = screen.getByRole('dialog', { name: '批量改位置' });
+    await user.selectOptions(within(dialog).getByLabelText('新位置'), '书房');
+    await user.click(within(dialog).getByRole('button', { name: '应用' }));
+
+    await waitFor(() => {
+      expect(within(dialog).getByRole('status').textContent).toContain('已移动 2 盆');
+    });
+    await user.click(within(dialog).getByRole('button', { name: '完成' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: '批量改位置' })).toBeNull();
+    });
+    const pa = await svc.getPlant(a.id);
+    const pb = await svc.getPlant(b.id);
+    expect(pa?.placement).toBe('书房');
+    expect(pb?.placement).toBe('书房');
+    // 改位置不动版本以外的档案字段：名字还在
+    expect(pa?.name).toBe('龟背竹 A');
+  });
+
+  test('添加完成后 refreshKey 变化会重取列表（修列表不刷新）', async () => {
+    const { svc } = await setup();
+    const { render } = await import('@testing-library/react');
+    const { a } = await seed(svc);
+    const ui = render(<Plants service={svc} onOpenPlant={() => {}} onAddPlant={() => {}} refreshKey={0} />);
+
+    // 添加一盆（模拟添加表单在植物页上方完成）
+    await svc.addPlant({ name: '后来添加', placement: '客厅', exposure: 'indoor' });
+
+    // 不重挂载，只递增 refreshKey —— 列表必须出现新植物
+    ui.rerender(<Plants service={svc} onOpenPlant={() => {}} onAddPlant={() => {}} refreshKey={1} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('后来添加')).toBeTruthy();
+      expect(screen.getByText('龟背竹 A')).toBeTruthy();
+    });
+    void a;
+  });
+});
